@@ -1,22 +1,58 @@
-<div id="map"></div>
-
+<TopAppBar bind:this={topAppBar} variant="fixed">
+  <Row>
+    <Section>
+      <IconButton on:click={() => menu.setOpen(true)} class="material-icons">menu</IconButton>
+      <Menu
+        bind:this={menu}
+        anchorCorner="BOTTOM_LEFT"
+      >
+        <List>
+          <Item on:SMUI:action={() => goto('/route')}>
+            <Text>Route</Text>
+          </Item>
+          <Item on:SMUI:action={() => goto('/logs')}>
+            <Text>Logs</Text>
+          </Item>
+          <Separator />
+          <Item on:SMUI:action={logout}>
+            <Text>Logout</Text>
+          </Item>
+        </List>
+      </Menu>
+      <Title>rollro</Title>
+    </Section>
+  </Row>
+</TopAppBar>
+<AutoAdjust {topAppBar}>
+  <div>rollro</div>
+</AutoAdjust>
+ 
 <script lang="ts">
-import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { signOut } from 'firebase/auth';
+	import { auth } from '$lib/firebase.client';
+  import TopAppBar, {
+    Row,
+    Section,
+    Title,
+    AutoAdjust,
+  } from '@smui/top-app-bar';
+  import IconButton from '@smui/icon-button';
+  import Menu from '@smui/menu';
+  import List, { Item, Separator, Text } from '@smui/list';
+ 
+  let topAppBar: TopAppBar;
+  let menu: Menu;
+  let clicked = 'nothing yet';
 
-onMount(() => {
-  let map: naver.maps.Map;
-  const center: naver.maps.LatLng = new naver.maps.LatLng(37.431057, 127.102147);
-
-  map = new naver.maps.Map('map', {
-      center: center,
-      zoom: 16
-  });
-});
+  export function logout() {
+    signOut(auth)
+      .then(() => {
+        goto('/login');
+      })
+      .catch((error) => {
+        throw new Error(error);
+      });
+  }
 </script>
-
-<style>
-#map {
-  height: 100%;
-}
-</style>
-
+ 
