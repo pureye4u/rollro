@@ -1,9 +1,7 @@
-<FloatingNavBar></FloatingNavBar>
 <div id="map"></div>
 
 <script lang="ts">
 import { onMount } from 'svelte';
-import FloatingNavBar from '../../components/FloatingNavBar.svelte';
 
 onMount(() => {
   let map: naver.maps.Map;

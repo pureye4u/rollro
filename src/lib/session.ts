@@ -5,12 +5,13 @@ type User = {
 	displayName?: string | null;
 	photoURL?: string | null;
 	uid?: string | null;
+	isVerified?: boolean | null;
 };
 
 export type SessionState = {
 	user: User | null;
-	loading?: boolean;
-	loggedIn?: boolean;
+	isLoading?: boolean;
+	isLoggedIn?: boolean;
 };
 
 export const session = <Writable<SessionState>>writable();

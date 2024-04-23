@@ -1,9 +1,10 @@
 /** @type {import('./$types').LayoutLoad} */
 export const prerender = true;
 
+import { onAuthStateChanged } from 'firebase/auth';
 import { initializeFirebase, auth } from '$lib/firebase.client';
 import { browser } from '$app/environment';
-import { onAuthStateChanged } from 'firebase/auth';
+import { getIsVerified } from '../services/userService';
 
 export async function load({ url }: { url: URL }) {
   if (browser) {
@@ -16,7 +17,14 @@ export async function load({ url }: { url: URL }) {
 
   function getAuthUser() {
     return new Promise((resolve) => {
-      onAuthStateChanged(auth, (user) => resolve(user ? user : false));
+      onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          const isVerified = await getIsVerified(user.uid);
+          resolve({ ...user, isVerified })
+        } else {
+          resolve(false);
+        }
+      });
     });
   }
 

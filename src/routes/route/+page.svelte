@@ -1,22 +1,31 @@
-<div id="map"></div>
+<NavBarContainer>
+  <List class="route-list" dense>
+    {#each routeList as route}
+    <Item on:SMUI:action={() => goto(`/route/${route.id}`)}>
+      <Text>{route.title}</Text>
+    </Item>
+    {/each}
+  </List>
+</NavBarContainer>
 
 <script lang="ts">
 import { onMount } from 'svelte';
+import { collection, getDocs } from 'firebase/firestore';
+import List, { Item, Text } from '@smui/list';
+import { goto } from '$app/navigation';
+import { db } from '$lib/firebase.client';
+import NavBarContainer from '../../components/NavBarContainer.svelte';
+
+let routeList: any[] = [];
+
+async function loadRouteList() {
+  let ref = collection(db, 'route');
+  const snapshot = await getDocs(ref);
+  routeList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
 
 onMount(() => {
-  let map: naver.maps.Map;
-  const center: naver.maps.LatLng = new naver.maps.LatLng(37.431057, 127.102147);
-
-  map = new naver.maps.Map('map', {
-      center: center,
-      zoom: 16
-  });
+  loadRouteList()
 });
+
 </script>
-
-<style>
-#map {
-  height: 100%;
-}
-</style>
-

@@ -3,25 +3,260 @@
 @use '@material/theme/color-palette';
 
 // Svelte Colors!
-@use '@material/theme/index' as theme with (
-  $primary: #000,
-  $secondary: #ff3e00,
-  $surface: #fff,
-  $background: #fff,
-  $error: color-palette.$red-900
-);
+@use '@material/theme/index' as theme with ($primary: #000,
+	$secondary: #ff3e00,
+	$surface: #fff,
+	$background: #fff,
+	$error: color-palette.$red-900);
+
+@use '@material/button/mixins' as mdc-button;
+
+/* http://meyerweb.com/eric/tools/css/reset/ 
+   v2.0 | 20110126
+   License: none (public domain)
+*/
+
+html,
+body,
+div,
+span,
+applet,
+object,
+iframe,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+a,
+abbr,
+acronym,
+address,
+big,
+cite,
+code,
+del,
+dfn,
+em,
+img,
+ins,
+kbd,
+q,
+s,
+samp,
+small,
+strike,
+strong,
+sub,
+sup,
+tt,
+var,
+b,
+u,
+i,
+center,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+label,
+legend,
+table,
+caption,
+tbody,
+tfoot,
+thead,
+tr,
+th,
+td,
+article,
+aside,
+canvas,
+details,
+embed,
+figure,
+figcaption,
+footer,
+header,
+hgroup,
+menu,
+nav,
+output,
+ruby,
+section,
+summary,
+time,
+mark,
+audio,
+video {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-size: 100%;
+	font: inherit;
+	vertical-align: baseline;
+}
+
+/* HTML5 display-role reset for older browsers */
+article,
+aside,
+details,
+figcaption,
+figure,
+footer,
+header,
+hgroup,
+menu,
+nav,
+section {
+	display: block;
+}
+
+body {
+	line-height: 1;
+}
+
+ol,
+ul {
+	list-style: none;
+}
+
+blockquote,
+q {
+	quotes: none;
+}
+
+blockquote:before,
+blockquote:after,
+q:before,
+q:after {
+	content: '';
+	content: none;
+}
+
+table {
+	border-collapse: collapse;
+	border-spacing: 0;
+}
 
 html,
 body {
-  background-color: theme.$surface;
-  color: theme.$on-surface;
-  height: 100%;
-  margin: 0;
+	background-color: theme.$surface;
+	color: theme.$on-surface;
+	height: 100%;
+}
+
+main {
+	box-sizing: border-box;
+	height: 100%;
 }
 
 a {
-  color: #40b3ff;
+	color: theme.$on-primary;
+	text-decoration: none;
 }
-a:visited {
-  color: color.scale(#40b3ff, $lightness: -35%);
+
+/* Common */
+
+.button-map-point {
+  &.mdc-button {
+		@include mdc-button.shape-radius(100%);
+		@include mdc-button.ink-color(#fff);
+  }
+  &.mdc-button--unelevated,
+  &.mdc-button--raised {
+		@include mdc-button.shape-radius(100%);
+		@include mdc-button.filled-accessible(#fff);
+  }
+  &.mdc-button--outlined {
+		@include mdc-button.shape-radius(100%);
+		@include mdc-button.outline-color(#fff);
+		@include mdc-button.ink-color(#fff);
+  }
+  @include mdc-button.shape-radius(100%);
+	@include mdc-button.ripple-states(#fff);
+}
+
+#map .marker {
+  display:block;
+  margin: 0px;
+  padding: 0px;
+  border: 0px solid transparent;
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: color-palette.$deep-orange-a700;
+  max-width: none;
+  max-height: none;
+  -webkit-user-select: none;
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  left: 0px;
+  top: 0px;
+  text-align: center;
+  line-height: 22px;
+  color: #fff;
+	font-size: 11px;
+	box-shadow: 0px 3px 1px -2px rgba(0, 0, 0, 0.2), 0px 2px 2px 0px rgba(0, 0, 0, 0.14), 0px 1px 5px 0px rgba(0, 0, 0, 0.12);
+}
+
+.content-container {
+	box-sizing: border-box;
+	padding: 20px;
+}
+
+.shaped-outlined .mdc-notched-outline .mdc-notched-outline__leading {
+	border-radius: 28px 0 0 28px !important;
+	width: 28px !important;
+}
+
+.shaped-outlined .mdc-notched-outline .mdc-notched-outline__trailing {
+	border-radius: 0 28px 28px 0 !important;
+}
+
+.shaped-outlined .mdc-notched-outline .mdc-notched-outline__notch {
+	max-width: calc(100% - 28px * 2) !important;
+}
+
+.shaped-outlined.mdc-text-field--with-leading-icon:not(.mdc-text-field--label-floating) .mdc-floating-label {
+	left: 16px !important;
+}
+
+.shaped-outlined+.mdc-text-field-helper-line {
+	padding-left: 32px !important;
+	padding-right: 28px !important;
+}
+
+.outside {
+	height: 100vh;
+}
+
+.outside .label {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 200px;
+	height: 30px;
+	margin-top: -50px;
+	margin-left: -100px;
+	text-align: center;
+}
+
+.outside .button {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 200px;
+	height: 40px;
+	margin-top: -20px;
+	margin-left: -100px;
+	border-radius: 20px;
 }
