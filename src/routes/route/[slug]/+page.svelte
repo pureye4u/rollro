@@ -1,67 +1,3 @@
-<!--<SubNavBarContainer title={model.title}>
-  <div class="flex-container">
-    <div class="left content-container">
-      {#each points as point, index}
-        <div class="point-item">
-          <span class="title">{getLabelTitle(index, points.length)}</span>
-          <Textfield
-            class="shaped-outlined"
-            variant="outlined"
-            bind:value={point.lat}
-            label="Latitude"
-          />
-          <Textfield
-            class="shaped-outlined"
-            variant="outlined"
-            bind:value={point.lng}
-            label="Longitude"
-          />
-          <Radio
-            bind:group={selectedPointIndex}
-            value={index}
-          />
-        </div>
-      {/each}
-      <div class="row">
-        <Button
-          on:click={addPoint}
-          variant="unelevated"
-          class="button-shaped-round"
-        >
-          <Icon class="material-icons">add</Icon>
-          <Label>Add Point</Label>
-        </Button>
-      </div>
-      <div class="row">
-        <Button
-          on:click={loadDirection}
-          variant="unelevated"
-          class="button-shaped-round"
-        >
-          <Icon class="material-icons">add</Icon>
-          <Label>Find Route</Label>
-        </Button>
-      </div>
-      <div class="row">
-        <Button
-          on:click={makeLink}
-          variant="unelevated"
-          class="button-shaped-round"
-        >
-          <Icon class="material-icons">link</Icon>
-          <Label>Make Link</Label>
-        </Button>
-      </div>
-      <div class="row">
-        <Textfield bind:value={link} label="Link" />
-      </div>
-    </div>
-    <div class="right">
-      <div id="map"></div>
-    </div>
-  </div>
-</SubNavBarContainer>-->
-
 <Dialog
   bind:open
   aria-labelledby="editingTitle"
@@ -114,6 +50,9 @@
     </div>
     {/if}
     {#each points as point, index}
+    {#if index === 0 || split.indexOf(index) != -1}
+    <div>-----</div>
+    {/if}
     <div class="point-item">
       {#if editMode}
       <Fab color="primary" class="edit" on:click={() => {editPoint(index)}} mini>
@@ -130,6 +69,9 @@
       />
       {/if}
     </div>
+    {#if index === 0 || split.indexOf(index) != -1}
+    <div>-----</div>
+    {/if}
     {/each}
     {#if editMode && points.length > 0}
     <div class="point-item">
@@ -170,6 +112,7 @@ let model: RouteModel = {
   points: [],
 };
 
+const maxPoints = 6;
 let open = false;
 let editMode: boolean = false;
 let selectedPointIndex = -1;
@@ -179,6 +122,7 @@ let editingPointLat = 0;
 let editingPointLng = 0;
 let points: Point[] = [];
 let markers: naver.maps.Marker[] = [];
+let split: number[] = [];
 let map: naver.maps.Map;
 let routeLine: naver.maps.Polyline;
 let link: string = '';
@@ -193,19 +137,6 @@ async function loadRouteModel() {
   model = { id: document.id, ...document.data() } as RouteModel;
   if (Array.isArray(model.points)) {
     applyPoints(model.points);
-    markers = points.map((point, index) => {
-      const coord = { x: point.lng, y: point.lat } as naver.maps.Coord;
-      const marker = new naver.maps.Marker({
-        position: coord,
-        map: map,
-        icon: {
-            content: `<div class="marker">${index + 1}</div>`,
-            size: new naver.maps.Size(30, 30),
-            anchor: new naver.maps.Point(15, 15)
-        }
-      });
-      return marker;
-    });
     showAllPoints();
   }
 }
@@ -308,61 +239,69 @@ function goPoint(point: Point) {
 }
 
 function addPoint() {
-  const index = points.length;
+  const length = points.length;
+  const index = length > 1 ? length - 1 : length;
   const center = map.getCenter();
   const newPoint: Point = { lat: center.y, lng: center.x, title: getPointName() };
-  const marker = new naver.maps.Marker({
-    position: center,
-    map: map,
-    icon: {
-        content: `<div class="marker">${index + 1}</div>`,
-        size: new naver.maps.Size(30, 30),
-        anchor: new naver.maps.Point(15, 15)
-    }
-  });
-  markers.push(marker);
-  //let newPoints: Point[];
-  //if (points.length > 1) {
-  //  const last = points.pop()!;
-  //  newPoints = [...points, newPoint, last];
-  //} else if (points.length > 0) {
-  //  newPoints = [...points, newPoint];
-  //} else {
-  //  newPoints = [newPoint];
-  //}
-  //applyPoints(newPoints, true);
-  applyPoints([...points, newPoint], true);
+  let newPoints: Point[];
+  if (points.length > 1) {
+    const last = points.pop()!;
+    newPoints = [...points, newPoint, last];
+  } else if (points.length > 0) {
+    newPoints = [...points, newPoint];
+  } else {
+    newPoints = [newPoint];
+  }
+  applyPoints(newPoints, true);
+  applySplit();
   selectedPointIndex = index;
 }
 
 function applyPoints(newPoints: Point[], isModified: boolean = false) {
   points = newPoints;
   routeLine.setStyles('strokeOpacity', isModified ? 0.5 : 1);
+  syncMarker();
+}
+
+function applySplit() {
+  const lastIndex = split.length - 1;
+  const last = lastIndex < 0 ? 0 : split[lastIndex];
+  const count = points.length - last;
+  if (count > maxPoints) {
+    split.push(last + maxPoints);
+  }
+  console.log(split);
+}
+
+function syncMarker() {
+  points.forEach((point, index) => {
+    const position = { x: point.lng, y: point.lat } as naver.maps.Coord;
+    const content = `<div class="marker">${getMarkerLabel(index, points.length)}</div>`;
+    const size = new naver.maps.Size(30, 30);
+    const anchor = new naver.maps.Point(15, 15);
+    const icon = { content, size, anchor };
+    if (index < markers.length) {
+      markers[index].setOptions({ position, icon });
+    } else {
+      markers.push(new naver.maps.Marker({ position, map, icon }));
+    }
+  });
 }
 
 function getPointName() {
   const index = points.length;
-  //switch (index) {
-  //  case 0:
-  //    return '시작';
-  //  case 1:
-  //    return '종료';
-  //  default:
-  //    return `경유지 ${index - 1}`;
-  //}
-  return index === 0 ? '시작' : `경유지 ${index}`;
-}
-
-function getLabelTitle(index: number, length: number): string {
   switch (index) {
     case 0:
-      return 'Start';
+      return '출발';
+    case 1:
+      return '도착';
     default:
-      if (index === (length - 1)) {
-        return 'End';
-      }
-      return `Weypoint ${index}`;
+      return `경유${index - 1}`;
   }
+}
+
+function getMarkerLabel(index: number, length: number): string {
+  return index === 0 ? '출발' : index === length - 1 ? '도착' : String(index);
 }
 
 async function loadDirection() {
@@ -418,14 +357,20 @@ function makeLink() {
 }
 
 function convertPoint(point: Point) {
-  const RADIUS = 6378137;
-  const originShift = Math.PI * RADIUS;
+  //console.log(point);
+  //const RADIUS = 6378137;
+  //const originShift = Math.PI * RADIUS;
 
-  const x = point.lng * originShift / 180.0;
-  const latRad = point.lat * Math.PI / 180.0
-  const y = Math.log(Math.tan(Math.PI / 4.0 + latRad / 2.0)) * RADIUS;
+  //const x = point.lng * originShift / 180.0;
+  //const latRad = point.lat * Math.PI / 180.0
+  //const y = Math.log(Math.tan(Math.PI / 4.0 + latRad / 2.0)) * RADIUS;
 
-  return { x, y };
+  //console.log(x, y);
+  //console.log(naver.maps.EPSG3857Coord.fromLatLngToEPSG3857({ x: point.lng, y: point.lat } as naver.maps.Coord))
+
+  return naver.maps.TransCoord.fromLatLngToEPSG3857({ x: point.lng, y: point.lat } as naver.maps.Coord);
+  //const { x, y } = naver.maps.TransCoord.fromLatLngToEPSG3857({ x: point.lng, y: point.lat } as naver.maps.Coord);
+  //return { x, y };
 }
 
 function initMap() {
