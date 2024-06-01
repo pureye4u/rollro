@@ -1,16 +1,47 @@
 <Dialog
-  bind:open
+  bind:open={isOpenSearchDialog}
+  aria-labelledby="searchTitle"
+  aria-describedby="searchContent"
+>
+  <Title id="searchTitle">검색</Title>
+  <Content id="searchContent">
+    <div class="editing-text">
+      <Textfield on:keypress={keyDidPress} bind:value={searchKeyword} label="검색어" />
+    </div>
+  </Content>
+  <Actions>
+    <Button color="secondary">
+      <Label>취소</Label>
+    </Button>
+    <Button on:click={submitSearch} action="accept">
+      <Label>확인</Label>
+    </Button>
+  </Actions>
+</Dialog>
+
+<Dialog
+  bind:open={isOpenPointEditDialog}
   aria-labelledby="editingTitle"
   aria-describedby="editingContent"
 >
   <Title id="editingTitle">편집</Title>
   <Content id="editingContent">
-    <div class="editing-title">
+    <div class="editing-text">
       <Textfield bind:value={editingPointTitle} label="Title" />
     </div>
     <div class="editing-point">
-      <Textfield bind:value={editingPointLat} label="Latitude" />
-      <Textfield bind:value={editingPointLng} label="Longitude" />
+      <div>
+        <span>LatLng</span>
+        <Switch bind:checked={isPointEditDialogCoordModeEPSG4236} icons={false} />
+        <span>EPSG4236</span>
+      </div>
+      {#if isPointEditDialogCoordModeEPSG4236}
+      <Textfield bind:value={editingPointX} on:change={applyEditingPointEPSG4236} label="X" />
+      <Textfield bind:value={editingPointY} on:change={applyEditingPointEPSG4236} label="Y" />
+      {:else}
+      <Textfield bind:value={editingPointLat} on:change={applyEditingPoint} label="Latitude" />
+      <Textfield bind:value={editingPointLng} on:change={applyEditingPoint} label="Longitude" />
+      {/if}
     </div>
   </Content>
   <Actions>
@@ -20,134 +51,358 @@
   </Actions>
 </Dialog>
 
-<FloatingNavBar></FloatingNavBar>
+<Dialog
+  bind:open={isOpenDeleteDialog}
+  aria-labelledby="confirmTitle"
+  aria-describedby="confirmContent"
+>
+  <Title id="confirmTitle">편집</Title>
+  <Content id="confirmContent">
+    <div class="editing-text">
+      <Textfield bind:value={confirmDeleteTitle} label="Confirm Title" />
+    </div>
+  </Content>
+  <Actions>
+    <Button color="secondary">
+      <Label>취소</Label>
+    </Button>
+    <Button on:click={submitDelete} action="accept">
+      <Label>확인</Label>
+    </Button>
+  </Actions>
+</Dialog>
+
+<Dialog
+  bind:open={isOpenImportURLDialog}
+  aria-labelledby="importURLTitle"
+  aria-describedby="importURLContent"
+>
+  <Title id="importURLTitle">네이버 지도 주소 입력</Title>
+  <Content id="importURLContent">
+    <div class="editing-text">
+      <Textfield bind:value={importURL} label="URL" />
+    </div>
+  </Content>
+  <Actions>
+    <Button color="secondary">
+      <Label>취소</Label>
+    </Button>
+    <Button on:click={submitImportURL} action="accept">
+      <Label>확인</Label>
+    </Button>
+  </Actions>
+</Dialog>
+
+<Snackbar bind:this={snackbar}>
+  <Label>{snackbarMessage}</Label>
+</Snackbar>
+
 <div class="container">
-  <div id="map"></div>
-  <div class="point-layer">
-    <div class="edit-mode">
-      {#if editMode}
-      <Button on:click={saveEdit} variant="raised" color="secondary">
-        <Label>저장</Label>
-      </Button>
-      {:else}
-      <Button on:click={startEdit} variant="raised" color="secondary">
-        <Label>편집</Label>
-      </Button>
-      {/if}
-    </div>
-    {#if editMode}
-    <div class="point-item">
-      {#if points.length > 0}
-      <Fab color="primary" on:click={showAllPoints} extended>
-        <Icon class="material-icons">zoom_out_map</Icon>
-        <Label>모두보기</Label>
+	<header class:open={editMode}>
+    <nav>
+      <Fab class="nav-btn" color="primary" on:click={() => history.back()}>
+        <Icon class="material-icons">arrow_back</Icon>
       </Fab>
-      {/if}
-      <Fab color="primary" on:click={addPoint} extended>
-        <Icon class="material-icons">add</Icon>
-        <Label>추가</Label>
-      </Fab>
+      <!--<Fab class="nav-btn" color="primary" on:click={() => isOpenSearchDialog = true}>
+        <Icon class="material-icons">search</Icon>
+      </Fab>-->
+    </nav>
+		<ul class="menu">
+      {#each points as point, index}
+      <li class:selected={selectedPointIndex === index}>
+        {#if editMode}
+        <button class="icon" on:click={() => {editPoint(index)}}>
+          <Icon class="material-icons">edit</Icon>
+        </button>
+        <button class="icon" on:click={() => {toggleSplit(index)}}>
+          <Icon class="material-icons">{index === 0 || (index + 1) === points.length || split.indexOf(index) != -1 ? 'location_on' : 'location_off'}</Icon>
+        </button>
+        {/if}
+        <button on:click={() => selectPoint(index)}>
+          <span class="seq">{index + 1}</span>
+          <span class="title">{point.title}</span>
+        </button>
+      </li>
+      {/each}
+		</ul>
+    <div class="bottom">
+      <div class="point-action">
+        <Fab color="secondary" on:click={removeAlldPoint} mini disabled={points.length === 0}>
+          <Icon class="material-icons">playlist_remove</Icon>
+        </Fab>
+        <Fab color="secondary" on:click={removeSelectedPoint} mini>
+          <Icon class="material-icons">remove</Icon>
+        </Fab>
+        <Fab color="primary" on:click={moveSelectedPointDown} mini disabled={selectedPointIndex === (points.length - 1)}>
+          <Icon class="material-icons">arrow_drop_down</Icon>
+        </Fab>
+        <Fab color="primary" on:click={moveSelectedPointUp} mini disabled={selectedPointIndex === 0}>
+          <Icon class="material-icons">arrow_drop_up</Icon>
+        </Fab>
+        <Fab color="primary" on:click={addCurrentPoint} mini>
+          <Icon class="material-icons">add</Icon>
+        </Fab>
+        <Fab color="primary" on:click={openImportURLDialog} mini>
+          <Icon class="material-icons">input</Icon>
+        </Fab>
+      </div>
+      <div class="route-action">
+        <Fab color="primary" on:click={showAllPoints} mini>
+          <Icon class="material-icons">zoom_out_map</Icon>
+        </Fab>
+        <Fab color="primary" on:click={loadAllDirections} mini>
+          <Icon class="material-icons">route</Icon>
+        </Fab>
+        <Fab color="primary" on:click={makeAllLinks} mini>
+          <Icon class="material-icons">link</Icon>
+        </Fab>
+        {#if userID === model.author}
+        <Fab color="secondary" on:click={deleteRoute} mini>
+          <Icon class="material-icons">delete</Icon>
+        </Fab>
+        {/if}
+        <Button on:click={saveEdit} variant="raised" color="secondary">
+          <Label>저장</Label>
+        </Button>
+        <Button on:click={cancelEdit} variant="raised" color="primary">
+          <Label>취소</Label>
+        </Button>
+      </div>
     </div>
-    {/if}
-    {#each points as point, index}
-    {#if index === 0 || split.indexOf(index) != -1}
-    <div>-----</div>
-    {/if}
-    <div class="point-item">
-      {#if editMode}
-      <Fab color="primary" class="edit" on:click={() => {editPoint(index)}} mini>
-        <Icon class="material-icons">edit</Icon>
-      </Fab>
-      {/if}
-      <Fab color="primary" on:click={() => goPoint(point)} extended>
-        <Label>{point.title}</Label>
-      </Fab>
-      {#if editMode}
-      <Radio
-        bind:group={selectedPointIndex}
-        value={index}
-      />
-      {/if}
-    </div>
-    {#if index === 0 || split.indexOf(index) != -1}
-    <div>-----</div>
-    {/if}
-    {/each}
-    {#if editMode && points.length > 0}
-    <div class="point-item">
-      <Fab color="primary" on:click={loadDirection} extended>
-        <Icon class="material-icons">route</Icon>
-        <Label>경로탐색</Label>
-      </Fab>
-    </div>
-    {/if}
-    {#if selectedPointIndex >= 0}
-    <div class="point-control">
-      <IconButton class="material-icons" on:click={moveSelectedPointDown} size="button" disabled={selectedPointIndex === (points.length - 1)}>arrow_drop_down</IconButton>
-      <IconButton class="material-icons" on:click={moveSelectedPointUp} size="button" disabled={selectedPointIndex === 0}>arrow_drop_up</IconButton>
-      <IconButton class="material-icons" on:click={() => selectedPointIndex = -1} size="button" disabled={selectedPointIndex < 0}>close</IconButton>
-    </div>
-    {/if}
+    <button class="drawer" on:click={toggleEdit}>
+      <Icon class="material-icons">{editMode ? 'arrow_back' : 'arrow_forward'}</Icon>
+    </button>
+	</header>
+  <main>
+    <div id="map"></div>
+  </main>
+  <div class="title-layer">
+    <Textfield bind:value={title} label="제목" disabled={!editMode} />
   </div>
+  <ul class="link-box">
+    {#each links as link, index}
+    <li>
+      <Button on:click={() => copyToClipboard(link)} variant="raised">
+        <Label>경로{index + 1} 링크복사</Label>
+      </Button>
+    </li>
+    {/each}
+  </ul>
 </div>
 
 <script lang="ts">
-/** @type {import('./$types').PageData} */
 import { onMount } from 'svelte';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { goto } from '$app/navigation';
 import Textfield from '@smui/textfield';
 import Button from '@smui/button';
-import Dialog, { Title, Content, Actions, InitialFocus } from '@smui/dialog';
+import Dialog, { Title, Content, Actions } from '@smui/dialog';
 import Fab, { Label, Icon } from '@smui/fab';
-import IconButton from '@smui/icon-button';
-import Radio from '@smui/radio';
 import Switch from '@smui/switch';
+import Snackbar from '@smui/snackbar';
 import { db } from '$lib/firebase.client';
-import FloatingNavBar from '../../../components/FloatingNavBar.svelte';
-import SubNavBarContainer from "../../../components/SubNavBarContainer.svelte";
 import type { Point, RouteModel } from '../../../models/RouteModel';
 
 let model: RouteModel = {
   title: '',
+  author: undefined,
   points: [],
+  split: [],
+  paths: [],
+  links: [],
 };
 
+let userID: string;
+let title = '';
+let snackbar: Snackbar;
+let snackbarMessage = '';
 const maxPoints = 6;
-let open = false;
+let isOpenSearchDialog = false;
+let isOpenPointEditDialog = false;
+let isPointEditDialogCoordModeEPSG4236 = false;
+let isOpenDeleteDialog = false;
+let isOpenImportURLDialog = false;
 let editMode: boolean = false;
 let selectedPointIndex = -1;
 let editingPointIndex = -1;
 let editingPointTitle = '';
 let editingPointLat = 0;
 let editingPointLng = 0;
+let editingPointX = 0;
+let editingPointY = 0;
 let points: Point[] = [];
 let markers: naver.maps.Marker[] = [];
 let split: number[] = [];
+let paths: number[][] = [];
 let map: naver.maps.Map;
 let routeLine: naver.maps.Polyline;
-let link: string = '';
-let actions = [
-  { name: 'Link', icon: 'arrow_drop_down', count: 0 },
-  { name: 'Image', icon: 'arrow_drop_up', count: 0 },
-];
+let links: (string | null)[] = [];
+let confirmDeleteTitle = '';
+let importURL = '';
+let searchKeyword = '';
+
+function showSnackbar(message: string) {
+  snackbarMessage = message;
+  snackbar.open();
+}
 
 async function loadRouteModel() {
   let ref = doc(db, 'route', data.id);
   const document = await getDoc(ref);
   model = { id: document.id, ...document.data() } as RouteModel;
+  title = model.title;
+  if (Array.isArray(model.split)) {
+    split = model.split;
+  } else {
+    split = [];
+  }
+  if (Array.isArray(model.paths)) {
+    paths = model.paths.map(path => [path.lng, path.lat]);
+    drawPath(paths.map(point => (new naver.maps.LatLng(point[1], point[0]))));
+  } else {
+    paths = [];
+  }
+  if (Array.isArray(model.links)) {
+    links = model.links;
+  }
   if (Array.isArray(model.points)) {
     applyPoints(model.points);
     showAllPoints();
   }
 }
 
+async function saveRouteModel(): Promise<boolean> {
+  let ref = doc(db, 'route', data.id);
+  const updateData = {
+    title,
+    points,
+    split,
+    paths: paths.map(path => ({ lat: path[1], lng: path[0] } as Point)),
+    links,
+  };
+  try {
+    await setDoc(ref, updateData, { merge: true });
+    return true;
+  } catch (error) {
+    console.error('Save route model error:', error);
+    return false;
+  }
+}
+
+function deleteRoute() {
+  isOpenDeleteDialog = true;
+}
+
+async function submitDelete() {
+  if (userID != model.author) {
+    showSnackbar('삭제 권한이 없습니다.');
+    return;
+  }
+  if (model.title != confirmDeleteTitle) {
+    showSnackbar('입력 내용이 일치하지 않습니다.');
+    return;
+  }
+
+  try {
+    let ref = doc(db, 'route', data.id);
+    await deleteDoc(ref);
+    goto('/route');
+  } catch (error) {
+    console.error('Delete route model error:', error);
+  }
+}
+
+function keyDidPress(event: CustomEvent<any>) {
+  const keyboardEvent = event as unknown as KeyboardEvent
+  console.log(event)
+  console.log(keyboardEvent)
+  if (keyboardEvent?.keyCode === 13) {
+    submitSearch()
+    isOpenSearchDialog = false
+  }
+}
+
+async function submitSearch() {
+  console.log('search', searchKeyword)
+}
+
+function openImportURLDialog() {
+  importURL = '';
+  isOpenImportURLDialog = true;
+}
+
+function submitImportURL() {
+  const prefix = 'https://map.naver.com/p/directions/';
+  if (importURL.length === 0 || !importURL.startsWith(prefix)) {
+    showSnackbar('URL이 유호하지 않습니다. 단축URL은 지원되지 않습니다');
+    return;
+  }
+  const path = importURL.slice(prefix.length);
+  const segments = path.split('/');
+  if (segments.length < 2) {
+    showSnackbar('URL이 유호하지 않습니다.');
+    return;
+  }
+  const start = getPointFromSegments(segments[0]);
+  if (start === null) {
+    showSnackbar('출발지 정보가 유효하지 않습니다.');
+    return;
+  }
+  const end = getPointFromSegments(segments[1]);
+  if (end === null) {
+    showSnackbar('도착지 정보가 유호하지 않습니다.');
+    return;
+  }
+
+  const lastPoint = getLastPoint();
+  if (start != null && (lastPoint == null || !getIsSamePoint(start, lastPoint))) {
+    pushPoint(start);
+  }
+  const waypointPath = segments[2];
+  if (waypointPath != '-') {
+    const waypointSegments = waypointPath.split(':');
+    if (waypointSegments.length > 0) {
+      for (const waypointSegment of waypointSegments) {
+        const point = getPointFromSegments(waypointSegment);
+        if (point != null) {
+          pushPoint(point);
+        }
+      }
+    }
+  }
+  
+  if (end != null) {
+    pushPoint(end);
+  }
+
+  showAllPoints();
+}
+
+function getPointFromSegments(path: string): Point | undefined {
+  const segments = path.split(',');
+  if (segments.length < 2) {
+    return;
+  }
+  const x = parseFloat(segments[0]);
+  const y = parseFloat(segments[1]);
+  const epsg4236 = naver.maps.TransCoord.fromEPSG3857ToLatLng({ x, y } as naver.maps.Point);
+  let point = { lat: epsg4236.y, lng: epsg4236.x } as Point;
+  if (segments.length > 2) {
+    point.title = decodeURIComponent(segments[2]);
+  }
+  return point;
+}
+
 function editPoint(index: number) {
   const { title, lat, lng } = points[index];
+  const epsg3857 = naver.maps.TransCoord.fromLatLngToEPSG3857({ x: lng, y: lat } as naver.maps.Coord);
   editingPointIndex = index;
   editingPointTitle = title ?? '';
   editingPointLat = lat;
   editingPointLng = lng;
-  open = true;
+  editingPointX = epsg3857.x;
+  editingPointY = epsg3857.y;
+  isOpenPointEditDialog = true;
 }
 
 function startEdit() {
@@ -155,9 +410,25 @@ function startEdit() {
   resetEditData();
 }
 
-function saveEdit() {
+async function saveEdit() {
+  if (await saveRouteModel()) {
+    editMode = false;
+    resetEditData();
+    showSnackbar('저장되었습니다.');
+  }
+}
+
+function cancelEdit() {
   editMode = false;
   resetEditData();
+}
+
+function toggleEdit() {
+  if (editMode) {
+    cancelEdit()
+  } else {
+    startEdit()
+  }
 }
 
 function resetEditData() {
@@ -166,6 +437,8 @@ function resetEditData() {
   editingPointTitle = '';
   editingPointLat = 0;
   editingPointLng = 0;
+  editingPointX = 0;
+  editingPointY = 0;
 }
 
 function completeEditing() {
@@ -178,7 +451,6 @@ function completeEditing() {
     !isSetPoint &&
     origin.title === editingPointTitle
   ) {
-    console.log('no changes');
     return;
   }
   setPoint(editingPointIndex, editingPointLat, editingPointLng, editingPointTitle);
@@ -209,6 +481,22 @@ function moveSelectedPointDown() {
   applyPoints([...points], true);
 }
 
+function removeSelectedPoint() {
+  if (selectedPointIndex < 0 || selectedPointIndex >= points.length) {
+    showSnackbar('삭제할 포인트를 선택해주세요');
+    return;
+  }
+
+  points.splice(selectedPointIndex, 1);
+  applyPoints([...points], true);
+  selectedPointIndex = -1;
+}
+
+function removeAlldPoint() {
+  applyPoints([], true);
+  selectedPointIndex = -1;
+}
+
 function setPoint(index: number, lat: number, lng: number, title?: string) {
   if (!!title) {
     points[index].title = title;
@@ -233,27 +521,87 @@ function showAllPoints() {
   map.panToBounds(bounds);
 }
 
+function selectPoint(index: number) {
+  if (index < 0 || index >= points.length) {
+    return;
+  }
+  const point = points[index];
+  goPoint(point);
+  if (!editMode) {
+    return;
+  }
+  selectedPointIndex = index;
+}
+
+function toggleSplit(index: number) {
+  if (index === 0) {
+    showSnackbar('출발지입니다');
+    return;
+  }
+  if ((index + 1) === points.length) {
+    showSnackbar('목적지입니다');
+    return;
+  }
+
+  const splitIndex = split.indexOf(index);
+  if (splitIndex < 0) {
+    let i: number;
+    for (i = 0; i < split.length; ++i) {
+      if (index < split[i]) {
+        break;
+      }
+    }
+    split.splice(i, 0, index);
+  } else {
+    const previousIndex = split[splitIndex - 1];
+    const nextIndex = split[splitIndex + 1];
+    if ((nextIndex - previousIndex) > maxPoints) {
+      showSnackbar(`경유지 간격은 최대 ${maxPoints - 1}개를 넘을 수 없습니다`);
+      return;
+    }
+    split.splice(splitIndex, 1);
+  }
+  split = [...split];
+}
+
 function goPoint(point: Point) {
   const coord = { x: point.lng, y: point.lat } as naver.maps.Coord;
   map.morph(coord, 15);
 }
 
-function addPoint() {
-  const length = points.length;
-  const index = length > 1 ? length - 1 : length;
+function addCurrentPoint() {
   const center = map.getCenter();
-  const newPoint: Point = { lat: center.y, lng: center.x, title: getPointName() };
+  addPoint({ lat: center.y, lng: center.x, title: getPointName() } as Point);
+}
+
+function pushPoint(point: Point) {
+  addPoint(point, points.length);
+}
+
+function getLastPoint(): Point | undefined {
+  const lastIndex = points.length - 1;
+  if (lastIndex < 0) {
+    return;
+  }
+  return points[lastIndex];
+}
+
+function getIsSamePoint(lfs: Point, rfs: Point): boolean {
+  return lfs.lat === rfs.lat && lfs.lng === rfs.lng;
+}
+
+function addPoint(point: Point, at?: number) {
+  const length = points.length;
+  const index = !!at ? (at <= length ? at : length) : (length > 1 ? length - 1 : length);
   let newPoints: Point[];
-  if (points.length > 1) {
-    const last = points.pop()!;
-    newPoints = [...points, newPoint, last];
-  } else if (points.length > 0) {
-    newPoints = [...points, newPoint];
+  if (length === 0) {
+    newPoints = [point];
   } else {
-    newPoints = [newPoint];
+    newPoints = [...points];
+    newPoints.splice(index, 0, point);
   }
   applyPoints(newPoints, true);
-  applySplit();
+  applySection();
   selectedPointIndex = index;
 }
 
@@ -263,14 +611,13 @@ function applyPoints(newPoints: Point[], isModified: boolean = false) {
   syncMarker();
 }
 
-function applySplit() {
+function applySection() {
   const lastIndex = split.length - 1;
   const last = lastIndex < 0 ? 0 : split[lastIndex];
   const count = points.length - last;
   if (count > maxPoints) {
     split.push(last + maxPoints);
   }
-  console.log(split);
 }
 
 function syncMarker() {
@@ -286,6 +633,12 @@ function syncMarker() {
       markers.push(new naver.maps.Marker({ position, map, icon }));
     }
   });
+  if (points.length < markers.length) {
+    for (let i = points.length; i < markers.length; ++i) {
+      markers[i].setMap(null);
+    }
+    markers.length = points.length;
+  }
 }
 
 function getPointName() {
@@ -301,12 +654,39 @@ function getPointName() {
 }
 
 function getMarkerLabel(index: number, length: number): string {
-  return index === 0 ? '출발' : index === length - 1 ? '도착' : String(index);
+  return String(index + 1);
 }
 
-async function loadDirection() {
+async function loadAllDirections() {
   if (points.length < 2) {
+    showSnackbar('두개 이상의 포인트가 필요해요');
+    drawPath([]);
     return;
+  }
+  let newPaths: number[][] = [];
+  let first = 0;
+  console.log('split', split);
+  for (let i = 0; i < split.length; ++i) {
+    const last = split[i];
+    console.log('load', i);
+    const sectionPaths = await loadDirection(points.slice(first, last + 1)) ?? [];
+    newPaths = newPaths.concat(sectionPaths);
+    first = last;
+  }
+  const last = points.length - 1;
+  if (first < last) {
+    console.log('load last');
+    const sectionPaths = await loadDirection(points.slice(first, last + 1)) ?? [];
+    newPaths = newPaths.concat(sectionPaths);
+  }
+
+  paths = newPaths;
+  drawPath(newPaths.map(point => (new naver.maps.LatLng(point[1], point[0]))));
+}
+
+async function loadDirection(points: Point[]): Promise<number[][] | null> {
+  if (points.length < 1) {
+    return null;
   }
 
   let waypoints = [...points];
@@ -327,50 +707,93 @@ async function loadDirection() {
   const response = await fetch(path);
   if (response.ok) {
     const data = await response.json();
-    const path = data.responseData.route.traavoidcaronly[0].path as number[][];
-    drawPath(path.map(point => new naver.maps.LatLng(point[1], point[0])))
+    return data.responseData.route.traavoidcaronly[0].path as number[][];
   } else {
     console.error('Failed to fetch data:', response.status);
+    return null;
   }
 }
 
 function drawPath(path: naver.maps.LatLng[]) {
-  routeLine.setStyles('strokeOpacity', 1);
-  routeLine.setPath(path);
+  if (path.length === 0) {
+    routeLine.setMap(null);
+  } else {
+    routeLine.setOptions({
+      map: map,
+      strokeOpacity: 1,
+      path: path,
+    });
+  }
 }
 
-function makeLink() {
-  if (points.length < 2) {
-    return;
+function makeAllLinks() {
+  let first = 0;
+  let i = 0;
+  links = [];
+  for (i = 0; i < split.length; ++i) {
+    const last = split[i];
+    const link = makeLink(points.slice(first, last + 1));
+    links[i] = link;
+    first = last;
+  }
+  const last = points.length - 1;
+  if (first < last) {
+    const link = makeLink(points.slice(first, last + 1));
+    links[i] = link;
+  }
+}
+
+function makeLink(points: Point[]): string | null {
+  if (points.length < 1) {
+    return null;
   }
   
   let buffer = 'https://map.naver.com/p/directions/';
   let waypoints = [...points];
-  const start = convertPoint(waypoints.shift()!);
-  const end = convertPoint(waypoints.pop()!);
-  buffer += `${start.x},${start.y},START/${end.x},${end.y},END/`;
+  const start = waypoints.shift()!;
+  const end = waypoints.pop()!;
+  const startCoord = convertPoint(start);
+  const endCoord = convertPoint(end);
+  buffer += `${startCoord.x},${startCoord.y},${start.title}/${endCoord.x},${endCoord.y},${end.title}/`;
   if (waypoints.length > 0) {
-    buffer += waypoints.map(convertPoint).map((point, index) => (`${point.x},${point.y},${index + 1}`)).join(':');
+    buffer += waypoints.map(point => {
+      const coord = convertPoint(point);
+      return `${coord.x},${coord.y},${point.title}`;
+    }).join(':');
+  } else {
+    buffer += '-';
   }
   buffer += '/car';
-  link = buffer;
+  return buffer;
+}
+
+async function copyToClipboard(link: string | null) {
+  if (typeof link != 'string') {
+    showSnackbar('링크에 문제가 있어요!');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(link);
+    showSnackbar('링크가 복사됐어요!');
+  } catch (err) {
+    showSnackbar('링크 복사에 실패했어요!');
+  }
 }
 
 function convertPoint(point: Point) {
-  //console.log(point);
-  //const RADIUS = 6378137;
-  //const originShift = Math.PI * RADIUS;
-
-  //const x = point.lng * originShift / 180.0;
-  //const latRad = point.lat * Math.PI / 180.0
-  //const y = Math.log(Math.tan(Math.PI / 4.0 + latRad / 2.0)) * RADIUS;
-
-  //console.log(x, y);
-  //console.log(naver.maps.EPSG3857Coord.fromLatLngToEPSG3857({ x: point.lng, y: point.lat } as naver.maps.Coord))
-
   return naver.maps.TransCoord.fromLatLngToEPSG3857({ x: point.lng, y: point.lat } as naver.maps.Coord);
-  //const { x, y } = naver.maps.TransCoord.fromLatLngToEPSG3857({ x: point.lng, y: point.lat } as naver.maps.Coord);
-  //return { x, y };
+}
+
+function applyEditingPoint() {
+  const epsg3857 = naver.maps.TransCoord.fromLatLngToEPSG3857({ x: editingPointLng, y: editingPointLat } as naver.maps.Coord);
+  editingPointX = epsg3857.x;
+  editingPointY = epsg3857.y;
+}
+
+function applyEditingPointEPSG4236() {
+  const epsg4236 = naver.maps.TransCoord.fromEPSG3857ToLatLng({ x: editingPointX, y: editingPointY } as naver.maps.Point);
+  editingPointLat = epsg4236.y;
+  editingPointLng = epsg4236.x;
 }
 
 function initMap() {
@@ -394,12 +817,14 @@ function initMap() {
   routeLine = new naver.maps.Polyline({
       map: map,
       path: [],
-      strokeColor: '#00f',
+      strokeColor: '#536f93',
       strokeWeight: 3
   });
 }
 
-onMount(() => {
+onMount(async () => {
+	const user: any = await data.getAuthUser();
+  userID = user.uid;
   loadRouteModel()
   initMap();
 });
@@ -409,60 +834,206 @@ export let data;
 
 <style>
 .container {
-  position: relative;
+  display: flex;
   height: 100%;
 }
 
+header {
+  display: flex;
+  position: relative;
+  z-index: 10;
+  width: 0;
+  flex-direction: column;
+  background-color: #fff;
+  user-select: none;
+  transition: width .5s;
+}
+
+header.open {
+  width: 400px;
+  box-shadow:
+    0px 3px 5px -1px rgba(0, 0, 0, 0.2),
+    0px 5px 8px 0px rgba(0, 0, 0, 0.14),
+    0px 1px 14px 0px rgba(0, 0, 0, 0.12);
+}
+
+nav {
+  padding: 5px 10px;
+  z-index: 9;
+}
+
+header.open nav {
+  background-color: #fff;
+}
+
+:global(nav .nav-btn) {
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+.bottom {
+  position: absolute;
+  box-sizing: border-box;
+  bottom: 0;
+  right: 0;
+  width: 400px;
+  background-color: #fff;
+}
+
+.bottom .point-action,
+.bottom .route-action {
+  padding: 10px;
+  border-top: #eee 1px solid;
+}
+
+.bottom .point-action {
+  text-align: center;
+}
+
+.bottom .route-action {
+  text-align: right;
+}
+
+:global(.bottom .route-action > button) {
+  vertical-align: middle;
+}
+
+button.drawer {
+  position: absolute;
+  box-sizing: border-box;
+  bottom: 25px;
+  right: -40px;
+  width: 40px;
+  height: 50px;
+  text-align: center;
+  padding: 12px 8px;
+  background-color: #000;
+  cursor: pointer;
+  color: #fff;
+  border: none;
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
+ul.menu {
+  overflow-x: visible;
+  overflow-y: auto;
+  min-width: 68px;
+  margin-top: -38px;
+  margin-bottom: 0;
+  padding: 38px 4px 80px 4px;
+}
+
+header.open ul.menu {
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 120px;
+}
+
+ul.menu > li {
+  display: block;
+  box-sizing: border-box;
+  min-width: 40px;
+  padding: 5px 14px;
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+ul.menu > li.selected {
+  border: 1px #ccc solid;
+  border-radius: 5px;
+}
+
+ul.menu > li > button {
+  display: inline-block;
+  overflow: hidden;
+  max-width: 100%;
+  height: 40px;
+  margin-right: 5px;
+  padding: 0;
+  border: none;
+  border-radius: 20px;
+  background-color: #000;
+  cursor: pointer;
+  color: #fff;
+  font-size: 11px;
+  line-height: 40px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+ul.menu span.seq {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  text-align: center;
+  vertical-align: top;
+}
+
+ul.menu span.title {
+  display: inline-block;
+  overflow: hidden;
+  max-width: 300px;
+  text-align: left;
+  height: 40px;
+  padding-right: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+ul.menu > li > button.icon {
+  padding: 8px;
+}
+
+ul.menu > li:first-of-type {
+  z-index: 9;
+}
+
+main {
+  position: relative;
+  display: block;
+  flex: 1 1 auto;
+}
+
 #map {
-  position: fixed !important;
+  position: absolute !important;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
 }
 
-.point-layer {
+.title-layer {
   position: absolute;
-  top: 0;
-  right: 0;
-  text-align: right;
+  z-index: 10;
+  box-sizing: border-box;
+  top: 10px;
+  left: 80px;
+  height: 56px;
   user-select: none;
 }
 
-.point-item {
-  /*display: inline-block;*/
-  margin: 10px;
+:global(.title-layer > label) {
+  width: 300px;
 }
 
-/*.point-item .title {
-  box-sizing: border-box;
-  display: inline-block;
-  padding: 0 20px;
-  height: 50px;
-  background-color: #fff;
-  border-radius: 25px;
-  line-height: 52px;
-  box-shadow:
-    0px 3px 5px -1px rgba(0, 0, 0, 0.2),
-    0px 5px 8px 0px rgba(0, 0, 0, 0.14),
-    0px 1px 14px 0px rgba(0, 0, 0, 0.12);
-}*/
-
-.edit-mode {
-  padding: 10px;
+:global(.point-item .node) {
+  vertical-align: middle;
 }
 
-:global(.point-item button.edit, .point-item .mdc-radio) {
+:global(.point-item > button, .point-item .mdc-radio) {
   vertical-align: middle;
   margin-right: 5px;
 }
 
-.editing-title,
+.editing-text,
 .editing-point {
   padding: 10px;
 }
 
-:global(.editing-title > label) {
+:global(.editing-text > label) {
   width: 100%;
 }
 
@@ -474,46 +1045,39 @@ export let data;
   margin: 0 10px;
 }
 
-.point-control {
-  box-sizing: border-box;
-  margin: 5px 10px;
-  padding: 5px;
-  float: right;
-  width: fit-content;
-  background-color: #fff;
-  border-radius: 10px;
-  box-shadow:
-    0px 3px 5px -1px rgba(0, 0, 0, 0.2),
-    0px 5px 8px 0px rgba(0, 0, 0, 0.14),
-    0px 1px 14px 0px rgba(0, 0, 0, 0.12);
+ul.link-box {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin-top: 5px;
+  user-select: none;
 }
 
-/*.flex-container {
-  display: flex;
-  flex-wrap: wrap;
-  height: 100%;
+ul.link-box > li {
+  padding: 5px 10px;
 }
 
-.flex-container .left {
-  width: 600px;
+:global(#map .marker) {
+  display:block;
+  margin: 0px;
+  padding: 0px;
+  border: 0px solid transparent;
+  border-radius: 13px;
+  overflow: hidden;
+  background-color: #9ea6af;
+  max-width: none;
+  max-height: none;
+  user-select: none;
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  left: 0px;
+  top: 0px;
+  text-align: center;
+  line-height: 28px;
+  color: #fff;
+	font-size: 11px;
+	box-shadow: 0px 3px 1px -2px rgba(0, 0, 0, 0.2), 0px 2px 2px 0px rgba(0, 0, 0, 0.14), 0px 1px 5px 0px rgba(0, 0, 0, 0.12);
 }
 
-.flex-container .right {
-  flex-grow: 1;
-}
-.flex-container .right {
-  min-height: 500px;
-}
-
-@media(max-width: 1200px) {
-  .flex-container .left,
-  .flex-container .right {
-    width: 100%;
-  }
-}
-
-.row {
-  padding: 5px 0;
-}
-*/
 </style>
