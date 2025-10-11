@@ -8,3 +8,15 @@ node_modules
 !.env.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Firebase 관련
+serviceAccountKey.json
+rollro-firebase-adminsdk-*.json
+*-debug.log
+firebase-debug*.log
+firestore-debug.log
+ui-debug.log
+
+# 임시/마이그레이션
+scripts/
+scripts/node_modules
