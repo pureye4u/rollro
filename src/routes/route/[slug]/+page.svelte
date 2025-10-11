@@ -231,7 +231,7 @@
         <Fab color="primary" on:click={showAllPoints} mini>
           <Icon class="material-icons">zoom_out_map</Icon>
         </Fab>
-        <Fab color="primary" on:click={loadAllDirections} mini>
+        <Fab color="primary" on:click={handleLoadDirections} mini>
           <Icon class="material-icons">route</Icon>
         </Fab>
         <Fab color="primary" on:click={makeAllLinks} mini>
@@ -293,6 +293,7 @@ import { canEdit, canDelete, canManagePermissions, getUserPermission } from '../
 import type { RoutePermission } from '../../../models/RouteModel';
 import { getRouteMeta, updateRouteMeta, deleteRouteMeta } from '../../../services/routeMetaService';
 import { getRouteDetail, updateRouteDetail, deleteRouteDetail } from '../../../services/routeDetailService';
+import { loadDirection, loadAllDirections } from '../../../services/mapDirectionService';
 
 let model: RouteModel = {
   title: '',
@@ -907,61 +908,26 @@ function getMarkerLabel(index: number, length: number): string {
   return String(index + 1);
 }
 
-async function loadAllDirections() {
+async function handleLoadDirections() {
   if (points.length < 2) {
     showSnackbar('두개 이상의 포인트가 필요해요');
     drawPath([]);
     return;
   }
-  let newPaths: number[][] = [];
-  let first = 0;
+
   console.log('split', split);
-  for (let i = 0; i < split.length; ++i) {
-    const last = split[i];
-    console.log('load', i);
-    const sectionPaths = await loadDirection(points.slice(first, last + 1)) ?? [];
-    newPaths = newPaths.concat(sectionPaths);
-    first = last;
-  }
-  const last = points.length - 1;
-  if (first < last) {
-    console.log('load last');
-    const sectionPaths = await loadDirection(points.slice(first, last + 1)) ?? [];
-    newPaths = newPaths.concat(sectionPaths);
+  
+  // 서비스를 통해 경로 가져오기
+  const newPaths = await loadAllDirections(points, split, { option: 'traavoidcaronly' });
+
+  if (newPaths.length === 0) {
+    showSnackbar('경로를 불러오는데 실패했습니다');
+    drawPath([]);
+    return;
   }
 
   paths = newPaths;
   drawPath(newPaths.map(point => (new naver.maps.LatLng(point[1], point[0]))));
-}
-
-async function loadDirection(points: Point[]): Promise<number[][] | null> {
-  if (points.length < 1) {
-    return null;
-  }
-
-  let waypoints = [...points];
-  const start = waypoints.shift()!;
-  const end = waypoints.pop()!;
-  let query = [
-    'xid=j8gkbz5wnq',
-    'xkey=sRl2fIHNaDkgF79kK5Sx51TboKIThdM6fBAj5ApB',
-    `start=${start.lng},${start.lat}`,
-    `goal=${end.lng},${end.lat}`,
-    'option=traavoidcaronly',
-  ];
-  query.push('action=' + (waypoints.length > 5 ? 'direction15' : 'direction5'));
-  if (waypoints.length > 0) {
-    query.push('waypoints=' + waypoints.map((point) => (`${point.lng},${point.lat}`)).join('|'));
-  }
-  const path = `https://cgf0g5fahf.apigw.ntruss.com/direction5/v1/0nIvwzk5bm/json/?${query.join('&')}`;
-  const response = await fetch(path);
-  if (response.ok) {
-    const data = await response.json();
-    return data.responseData.route.traavoidcaronly[0].path as number[][];
-  } else {
-    console.error('Failed to fetch data:', response.status);
-    return null;
-  }
 }
 
 function drawPath(path: naver.maps.LatLng[]) {

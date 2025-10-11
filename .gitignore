@@ -21,3 +21,8 @@ ui-debug.log
 # 임시/마이그레이션
 scripts/
 scripts/node_modules
+
+# NCP Cloud Functions
+ncp/build/
+ncp/**/node_modules
+ncp/**/.env

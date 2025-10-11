@@ -10,7 +10,9 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"prepare": "npm run smui-theme",
-		"smui-theme": "smui-theme compile static/smui.css -i src/theme"
+		"smui-theme": "smui-theme compile static/smui.css -i src/theme",
+		"ncp:build": "cd ncp/mapDirection && ./build.sh",
+		"ncp:deploy": "cd ncp/mapDirection && ./deploy.sh"
 	},
 	"devDependencies": {
 		"@smui/button": "^7.0.0-beta.18",
