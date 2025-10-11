@@ -55,9 +55,16 @@ cd ..
 
 ### 3. 환경 변수 설정
 
-프로젝트 루트에 `.env` 파일을 생성하고 Firebase 설정을 추가합니다:
+`.env.example` 파일을 `.env`로 복사하고 실제 값을 입력합니다:
+
+```bash
+cp .env.example .env
+```
+
+`.env` 파일을 열어서 다음 값들을 설정합니다:
 
 ```env
+# Firebase Configuration
 VITE_FIREBASE_API_KEY=your_api_key
 VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
 VITE_FIREBASE_PROJECT_ID=your_project_id
@@ -66,7 +73,23 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
 VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 VITE_FIREBASE_USE_EMULATOR=false
+
+# Naver Cloud Platform (NCP) API Keys (선택 사항)
+# ⚠️ 이 키들은 NCP Cloud Functions 빌드 시에만 사용됩니다.
+# 클라이언트 실행에는 필요하지 않습니다.
+NCP_APIGW_API_KEY_ID=your_ncp_api_key_id
+NCP_APIGW_API_KEY=your_ncp_api_key
 ```
+
+**환경 변수 설명**:
+- **Firebase 설정**: 클라이언트 실행에 필수
+- **NCP API 키**: NCP Cloud Functions를 빌드할 때만 필요 (선택 사항)
+  - 클라이언트 앱 실행에는 영향 없음
+  - `npm run ncp:build` 실행 시 사용됨
+
+**참고**: NCP Direction API 엔드포인트(호스트, 경로)는 `src/services/mapDirectionService.ts` 파일의 상수로 관리됩니다.
+
+**주의**: `.env` 파일은 절대 Git에 커밋하지 마세요. 이미 `.gitignore`에 포함되어 있습니다.
 
 ### 4. Firebase 프로젝트 설정
 
@@ -163,6 +186,46 @@ firebase deploy --only functions
 - [ ] `npm run build`가 오류 없이 완료되는지 확인
 - [ ] Firebase 프로젝트가 올바르게 설정되어 있는지 확인 (`firebase use`)
 
+### NCP Cloud Functions 배포
+
+프로젝트는 Naver Map Direction API를 안전하게 호출하기 위한 NCP Cloud Functions를 사용합니다.
+
+#### 사전 준비
+
+NCP API 키를 프로젝트 루트의 `.env` 파일에 추가합니다:
+
+```bash
+# .env
+NCP_APIGW_API_KEY_ID=your_actual_key_id
+NCP_APIGW_API_KEY=your_actual_key
+```
+
+#### 빌드 및 배포
+
+```bash
+# 루트에서 빌드 (추천)
+npm run ncp:build
+
+# 또는 NCP 디렉토리에서 직접
+cd ncp/mapDirection
+./build.sh
+```
+
+빌드 시 프로젝트 루트의 `.env`에서 NCP 키를 자동으로 추출하여 패키징합니다.
+
+#### NCP Console에서 배포
+
+1. `npm run ncp:build`로 배포 파일 생성
+   - 생성 위치: `/ncp/build/mapDirection_YYYYMMDD_HHMMSS.zip`
+2. [NCP Console](https://console.ncloud.com) 로그인
+3. Services > Cloud Functions > Actions 메뉴로 이동
+4. `mapDirection` 액션 선택 (없으면 생성)
+5. '배포' 버튼 클릭 후 생성된 zip 파일 업로드
+
+**보안 권장사항**: 프로덕션 환경에서는 빌드에 키를 포함하지 말고, NCP Console에서 직접 환경 변수를 설정하세요.
+
+자세한 내용은 [ncp/mapDirection/README.md](ncp/mapDirection/README.md)를 참고하세요.
+
 ## 프로젝트 구조
 
 ```
@@ -189,8 +252,18 @@ rollro/
 │   │   └── ...
 │   ├── services/         # 비즈니스 로직
 │   │   ├── routeService.ts
-│   │   └── userService.ts
+│   │   ├── routeMetaService.ts
+│   │   ├── routeDetailService.ts
+│   │   ├── userService.ts
+│   │   └── mapDirectionService.ts  # NCP Direction API 서비스
 │   └── theme/            # SMUI 테마 설정
+├── ncp/                 # NCP Cloud Functions
+│   └── mapDirection/    # Map Direction API 프록시
+│       ├── index.js
+│       ├── package.json
+│       ├── build.sh
+│       ├── deploy.sh
+│       └── README.md
 ├── functions/            # Firebase Functions
 │   └── src/
 ├── static/              # 정적 파일
@@ -198,6 +271,25 @@ rollro/
 ├── svelte.config.js     # SvelteKit 설정
 └── vite.config.ts       # Vite 설정
 ```
+
+## NCP API 엔드포인트 설정
+
+NCP Direction API 엔드포인트는 `src/services/mapDirectionService.ts` 파일의 상수로 관리됩니다.
+
+### 엔드포인트 변경 방법
+
+다른 NCP Cloud Functions 엔드포인트를 사용하려면 다음 상수를 수정하세요:
+
+```typescript
+// src/services/mapDirectionService.ts
+const NCP_DIRECTION_API_HOST = 'cgf0g5fahf.apigw.ntruss.com';  // 호스트 변경
+const NCP_DIRECTION_API_PATH = '/direction5/v1/0nIvwzk5bm/json/';  // 경로 변경
+```
+
+**변경이 필요한 경우**:
+- NCP Cloud Functions를 새로 배포한 경우
+- 다른 리전이나 프로젝트로 마이그레이션한 경우
+- 커스텀 도메인을 사용하는 경우
 
 ## 주요 스크립트
 
@@ -222,6 +314,12 @@ npm run check:watch
 
 # SMUI 테마 컴파일
 npm run smui-theme
+
+# NCP Cloud Functions 빌드
+npm run ncp:build
+
+# NCP Cloud Functions 배포
+npm run ncp:deploy
 ```
 
 ## 권한 시스템
