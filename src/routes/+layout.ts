@@ -1,5 +1,6 @@
 /** @type {import('./$types').LayoutLoad} */
-export const prerender = true;
+export const prerender = false;
+export const ssr = false;
 
 import { onAuthStateChanged } from 'firebase/auth';
 import { initializeFirebase, auth } from '$lib/firebase.client';

@@ -93,6 +93,87 @@
   </Actions>
 </Dialog>
 
+<Dialog
+  bind:open={isOpenPermissionDialog}
+  aria-labelledby="permissionTitle"
+  aria-describedby="permissionContent"
+  class="permission-dialog"
+>
+  <Title id="permissionTitle">권한 관리</Title>
+  <Content id="permissionContent">
+    <div class="permission-section">
+      <h4>공개 설정</h4>
+      <div class="switch-row">
+        <span>공개 여정</span>
+        <Switch bind:checked={editingIsPublic} />
+      </div>
+      <p class="hint">공개 여정은 모든 사용자가 볼 수 있습니다.</p>
+    </div>
+
+    <div class="permission-section">
+      <h4>편집 권한 (Editor)</h4>
+      <div class="user-input-row">
+        <Textfield 
+          bind:value={newEditorEmail} 
+          label="이메일 주소" 
+          style="flex: 1;"
+        />
+        <Button on:click={addEditor} variant="outlined">
+          <Icon class="material-icons">add</Icon>
+          <Label>추가</Label>
+        </Button>
+      </div>
+      <List class="user-list" dense>
+        {#each editingEditors as editor}
+        <Item>
+          <Text>{editor}</Text>
+          <span slot="meta">
+            <Button on:click={() => removeEditor(editor)}>
+              <Icon class="material-icons">close</Icon>
+            </Button>
+          </span>
+        </Item>
+        {/each}
+      </List>
+    </div>
+
+    <div class="permission-section">
+      <h4>보기 권한 (Viewer)</h4>
+      <div class="user-input-row">
+        <Textfield 
+          bind:value={newViewerEmail} 
+          label="이메일 주소" 
+          style="flex: 1;"
+        />
+        <Button on:click={addViewer} variant="outlined">
+          <Icon class="material-icons">add</Icon>
+          <Label>추가</Label>
+        </Button>
+      </div>
+      <List class="user-list" dense>
+        {#each editingViewers as viewer}
+        <Item>
+          <Text>{viewer}</Text>
+          <span slot="meta">
+            <Button on:click={() => removeViewer(viewer)}>
+              <Icon class="material-icons">close</Icon>
+            </Button>
+          </span>
+        </Item>
+        {/each}
+      </List>
+    </div>
+  </Content>
+  <Actions>
+    <Button color="secondary">
+      <Label>취소</Label>
+    </Button>
+    <Button on:click={savePermissions} action="accept">
+      <Label>저장</Label>
+    </Button>
+  </Actions>
+</Dialog>
+
 <Snackbar bind:this={snackbar}>
   <Label>{snackbarMessage}</Label>
 </Snackbar>
@@ -156,7 +237,12 @@
         <Fab color="primary" on:click={makeAllLinks} mini>
           <Icon class="material-icons">link</Icon>
         </Fab>
-        {#if userID === model.author}
+        {#if canManagePermissions(model, userID)}
+        <Fab color="primary" on:click={openPermissionDialog} mini>
+          <Icon class="material-icons">share</Icon>
+        </Fab>
+        {/if}
+        {#if canDelete(model, userID)}
         <Fab color="secondary" on:click={deleteRoute} mini>
           <Icon class="material-icons">delete</Icon>
         </Fab>
@@ -200,17 +286,28 @@ import Dialog, { Title, Content, Actions } from '@smui/dialog';
 import Fab, { Label, Icon } from '@smui/fab';
 import Switch from '@smui/switch';
 import Snackbar from '@smui/snackbar';
+import List, { Item, Text } from '@smui/list';
 import { db } from '$lib/firebase.client';
 import type { Point, RouteModel } from '../../../models/RouteModel';
+import { canEdit, canDelete, canManagePermissions, getUserPermission } from '../../../services/routeService';
+import type { RoutePermission } from '../../../models/RouteModel';
+import { getRouteMeta, updateRouteMeta, deleteRouteMeta } from '../../../services/routeMetaService';
+import { getRouteDetail, updateRouteDetail, deleteRouteDetail } from '../../../services/routeDetailService';
 
 let model: RouteModel = {
   title: '',
   author: undefined,
+  owner: undefined,
+  editors: [],
+  viewers: [],
+  isPublic: false,
   points: [],
   split: [],
   paths: [],
   links: [],
 };
+
+let userPermission: RoutePermission;
 
 let userID: string;
 let title = '';
@@ -222,6 +319,7 @@ let isOpenPointEditDialog = false;
 let isPointEditDialogCoordModeEPSG4236 = false;
 let isOpenDeleteDialog = false;
 let isOpenImportURLDialog = false;
+let isOpenPermissionDialog = false;
 let editMode: boolean = false;
 let selectedPointIndex = -1;
 let editingPointIndex = -1;
@@ -241,15 +339,46 @@ let confirmDeleteTitle = '';
 let importURL = '';
 let searchKeyword = '';
 
+// 권한 관리 관련 변수
+let editingIsPublic = false;
+let editingEditors: string[] = [];
+let editingViewers: string[] = [];
+let newEditorEmail = '';
+let newViewerEmail = '';
+
 function showSnackbar(message: string) {
   snackbarMessage = message;
   snackbar.open();
 }
 
 async function loadRouteModel() {
-  let ref = doc(db, 'route', data.id);
-  const document = await getDoc(ref);
-  model = { id: document.id, ...document.data() } as RouteModel;
+  // route-meta와 route-detail을 각각 조회
+  const [meta, detail] = await Promise.all([
+    getRouteMeta(data.id),
+    getRouteDetail(data.id)
+  ]);
+  
+  if (!meta || !detail) {
+    showSnackbar('여정을 찾을 수 없습니다.');
+    setTimeout(() => goto('/route'), 1000);
+    return;
+  }
+  
+  // 두 데이터를 합쳐서 RouteModel 생성
+  model = { ...meta, ...detail, id: data.id } as RouteModel;
+  
+  // 권한 체크
+  userPermission = getUserPermission(model, userID);
+  
+  // 권한이 없으면 목록으로 리다이렉트
+  if (userPermission === 'none') {
+    showSnackbar('이 여정을 볼 권한이 없습니다.');
+    setTimeout(() => {
+      goto('/route');
+    }, 1000);
+    return;
+  }
+  
   title = model.title;
   if (Array.isArray(model.split)) {
     split = model.split;
@@ -269,19 +398,29 @@ async function loadRouteModel() {
     applyPoints(model.points);
     showAllPoints();
   }
+  
+  // 권한이 없으면 편집 모드로 전환되지 않도록
+  if (!canEdit(model, userID)) {
+    editMode = false;
+  }
 }
 
 async function saveRouteModel(): Promise<boolean> {
-  let ref = doc(db, 'route', data.id);
-  const updateData = {
-    title,
-    points,
-    split,
-    paths: paths.map(path => ({ lat: path[1], lng: path[0] } as Point)),
-    links,
-  };
   try {
-    await setDoc(ref, updateData, { merge: true });
+    // route-detail 업데이트 (지도 데이터)
+    await updateRouteDetail(data.id, {
+      points,
+      split,
+      paths: paths.map(path => ({ lat: path[1], lng: path[0] } as Point)),
+      links,
+    });
+    
+    // route-meta 업데이트 (메타데이터)
+    await updateRouteMeta(data.id, {
+      title,
+      pointsCount: points.length,
+    });
+    
     return true;
   } catch (error) {
     console.error('Save route model error:', error);
@@ -294,7 +433,7 @@ function deleteRoute() {
 }
 
 async function submitDelete() {
-  if (userID != model.author) {
+  if (!canDelete(model, userID)) {
     showSnackbar('삭제 권한이 없습니다.');
     return;
   }
@@ -304,8 +443,12 @@ async function submitDelete() {
   }
 
   try {
-    let ref = doc(db, 'route', data.id);
-    await deleteDoc(ref);
+    // route-detail과 route-meta 모두 삭제
+    await Promise.all([
+      deleteRouteDetail(data.id),
+      deleteRouteMeta(data.id)
+    ]);
+    
     goto('/route');
   } catch (error) {
     console.error('Delete route model error:', error);
@@ -329,6 +472,108 @@ async function submitSearch() {
 function openImportURLDialog() {
   importURL = '';
   isOpenImportURLDialog = true;
+}
+
+function openPermissionDialog() {
+  if (!canManagePermissions(model, userID)) {
+    showSnackbar('권한 관리 권한이 없습니다.');
+    return;
+  }
+  
+  // 현재 권한 정보를 복사
+  editingIsPublic = model.isPublic ?? false;
+  editingEditors = [...(model.editors ?? [])];
+  editingViewers = [...(model.viewers ?? [])];
+  newEditorEmail = '';
+  newViewerEmail = '';
+  
+  isOpenPermissionDialog = true;
+}
+
+function addEditor() {
+  const email = newEditorEmail.trim();
+  if (!email) {
+    showSnackbar('이메일 주소를 입력해주세요.');
+    return;
+  }
+  
+  // 이메일 형식 검증 (간단한 검증)
+  if (!email.includes('@')) {
+    showSnackbar('올바른 이메일 주소를 입력해주세요.');
+    return;
+  }
+  
+  // 이미 추가된 사용자인지 확인
+  if (editingEditors.includes(email)) {
+    showSnackbar('이미 추가된 사용자입니다.');
+    return;
+  }
+  
+  // viewer 목록에서 제거 (editor가 더 높은 권한)
+  editingViewers = editingViewers.filter(v => v !== email);
+  
+  editingEditors = [...editingEditors, email];
+  newEditorEmail = '';
+  showSnackbar('편집 권한이 추가되었습니다.');
+}
+
+function removeEditor(email: string) {
+  editingEditors = editingEditors.filter(e => e !== email);
+}
+
+function addViewer() {
+  const email = newViewerEmail.trim();
+  if (!email) {
+    showSnackbar('이메일 주소를 입력해주세요.');
+    return;
+  }
+  
+  // 이메일 형식 검증 (간단한 검증)
+  if (!email.includes('@')) {
+    showSnackbar('올바른 이메일 주소를 입력해주세요.');
+    return;
+  }
+  
+  // 이미 추가된 사용자인지 확인
+  if (editingViewers.includes(email) || editingEditors.includes(email)) {
+    showSnackbar('이미 추가된 사용자입니다.');
+    return;
+  }
+  
+  editingViewers = [...editingViewers, email];
+  newViewerEmail = '';
+  showSnackbar('보기 권한이 추가되었습니다.');
+}
+
+function removeViewer(email: string) {
+  editingViewers = editingViewers.filter(v => v !== email);
+}
+
+async function savePermissions() {
+  if (!canManagePermissions(model, userID)) {
+    showSnackbar('권한 관리 권한이 없습니다.');
+    return;
+  }
+  
+  try {
+    // route-meta만 업데이트 (권한 정보는 메타데이터)
+    await updateRouteMeta(data.id, {
+      isPublic: editingIsPublic,
+      editors: editingEditors,
+      viewers: editingViewers,
+    });
+    
+    // 로컬 모델 업데이트
+    model.isPublic = editingIsPublic;
+    model.editors = editingEditors;
+    model.viewers = editingViewers;
+    
+    showSnackbar('권한이 저장되었습니다.');
+    isOpenPermissionDialog = false;
+  } catch (error) {
+    console.error('Save permissions error:', error);
+    showSnackbar('권한 저장에 실패했습니다.');
+  }
 }
 
 function submitImportURL() {
@@ -406,6 +651,11 @@ function editPoint(index: number) {
 }
 
 function startEdit() {
+  // 편집 권한이 없으면 편집 모드로 전환하지 않음
+  if (!canEdit(model, userID)) {
+    showSnackbar('편집 권한이 없습니다.');
+    return;
+  }
   editMode = true;
   resetEditData();
 }
@@ -922,6 +1172,13 @@ ul.menu {
   margin-top: -38px;
   margin-bottom: 0;
   padding: 38px 4px 80px 4px;
+  /* 스크롤바 숨기기 */
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+ul.menu::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
 }
 
 header.open ul.menu {
@@ -1078,6 +1335,58 @@ ul.link-box > li {
   color: #fff;
 	font-size: 11px;
 	box-shadow: 0px 3px 1px -2px rgba(0, 0, 0, 0.2), 0px 2px 2px 0px rgba(0, 0, 0, 0.14), 0px 1px 5px 0px rgba(0, 0, 0, 0.12);
+}
+
+/* 권한 관리 Dialog 스타일 */
+:global(.permission-dialog .mdc-dialog__surface) {
+  max-width: 600px;
+  width: 90%;
+}
+
+.permission-section {
+  margin-bottom: 24px;
+}
+
+.permission-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.hint {
+  font-size: 12px;
+  color: #666;
+  margin: 8px 0 0 0;
+}
+
+.user-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+
+.user-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+:global(.user-list .mdc-deprecated-list-item) {
+  border-bottom: 1px solid #f5f5f5;
+}
+
+:global(.user-list .mdc-deprecated-list-item:last-child) {
+  border-bottom: none;
 }
 
 </style>
