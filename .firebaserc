@@ -1,7 +1,6 @@
 {
   "projects": {
-    "live": "rollro",
-    "develop": "rollro"
+    "defalut": "rollro"
   },
   "targets": {},
   "etags": {}
