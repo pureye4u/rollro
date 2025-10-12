@@ -915,8 +915,6 @@ async function handleLoadDirections() {
     return;
   }
 
-  console.log('split', split);
-  
   // 서비스를 통해 경로 가져오기
   const newPaths = await loadAllDirections(points, split, { option: 'traavoidcaronly' });
 
@@ -1340,19 +1338,5 @@ ul.link-box > li {
   margin-bottom: 12px;
 }
 
-.user-list {
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid #eee;
-  border-radius: 4px;
-}
-
-:global(.user-list .mdc-deprecated-list-item) {
-  border-bottom: 1px solid #f5f5f5;
-}
-
-:global(.user-list .mdc-deprecated-list-item:last-child) {
-  border-bottom: none;
-}
 
 </style>

@@ -1,4 +1,4 @@
-// 환경 변수 로드 (로컬 개발용)
+// 환경 변수 로드 (.env 파일이 있는 경우)
 require('dotenv').config();
 
 const axios = require('axios');
@@ -8,9 +8,11 @@ exports.main = async (params) => {
 		const { start, goal, waypoints, option } = params;
 		const targetUrl = 'https://maps.apigw.ntruss.com/map-direction/v1/driving';
 
-		// 환경 변수에서 API 키를 읽어옵니다
-		const apiKeyId = process.env.NCP_APIGW_API_KEY_ID;
-		const apiKey = process.env.NCP_APIGW_API_KEY;
+		// API 키 가져오기
+		// 1. params에서 (디폴트 파라미터)
+		// 2. process.env에서 (.env 파일)
+		const apiKeyId = params.NCP_APIGW_API_KEY_ID || process.env.NCP_APIGW_API_KEY_ID;
+		const apiKey = params.NCP_APIGW_API_KEY || process.env.NCP_APIGW_API_KEY;
 
 		// API 키가 설정되지 않은 경우 에러 반환
 		if (!apiKeyId || !apiKey) {
@@ -18,7 +20,7 @@ exports.main = async (params) => {
 			return {
 				statusCode: 500,
 				body: JSON.stringify({
-					error: 'NCP API keys are not configured. Please set NCP_APIGW_API_KEY_ID and NCP_APIGW_API_KEY environment variables.'
+					error: 'NCP API keys are not configured. Please set NCP_APIGW_API_KEY_ID and NCP_APIGW_API_KEY in default parameters or environment variables.'
 				})
 			};
 		}
