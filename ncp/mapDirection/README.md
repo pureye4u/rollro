@@ -25,24 +25,28 @@ ncp/mapDirection/
 
 NCP API 키는 환경 변수로 관리됩니다. 두 가지 방법이 있습니다:
 
-### NCP Console에서 디폴트 파라미터 설정 (필수)
+#### 방법 A: 프로젝트 루트의 .env 파일 사용 (추천)
 
-배포 후 NCP Console에서 디폴트 파라미터를 설정해야 합니다:
+프로젝트 루트의 `.env` 파일에 다음 변수를 추가합니다:
+
+```bash
+# .env (프로젝트 루트)
+NCP_APIGW_API_KEY_ID=your_actual_key_id
+NCP_APIGW_API_KEY=your_actual_key
+```
+
+빌드 시 자동으로 이 값들을 읽어서 패키징합니다.
+
+#### 방법 B: NCP Console에서 직접 설정
+
+배포 후 NCP Console에서 환경 변수를 설정할 수도 있습니다:
 
 1. [NCP Console](https://console.ncloud.com) 접속
 2. Cloud Functions > Actions > mapDirection 선택
-3. **디폴트 파라미터** 탭 선택
-4. 다음 파라미터 추가:
-   ```json
-   {
-     "NCP_APIGW_API_KEY_ID": "95uqsbhft5",
-     "NCP_APIGW_API_KEY": "M19r1m5znwNWuImEs96aURFIDF6L4cz07gdfibCY"
-   }
-   ```
-   또는 개별 추가:
-   - 키: `NCP_APIGW_API_KEY_ID`, 값: 실제 Client ID
-   - 키: `NCP_APIGW_API_KEY`, 값: 실제 Client Key
-5. **저장** 클릭
+3. '환경 변수' 탭 선택
+4. 다음 변수 추가:
+   - `NCP_APIGW_API_KEY_ID`: 실제 API Key ID
+   - `NCP_APIGW_API_KEY`: 실제 API Key
 
 ### 2. .env.example 파일
 
@@ -101,15 +105,9 @@ main(params).then(result => {
 
 날짜시간이 포함된 배포 파일을 `/ncp/build` 디렉토리에 생성합니다:
 
-### 프로덕션용 빌드 (.env 제외 - 기본, 권장 🔒)
 ```bash
 chmod +x build.sh
 ./build.sh
-```
-
-### 개발/테스트용 빌드 (.env 포함)
-```bash
-./build.sh --with-env
 ```
 
 ### 빌드 결과
@@ -126,16 +124,14 @@ chmod +x build.sh
 1. `/ncp/build` 디렉토리 생성
 2. 날짜시간 기반 파일명 생성 (`mapDirection_YYYYMMDD_HHMMSS.zip`)
 3. 임시 파일 정리 (`node_modules` 삭제)
-4. 프로젝트 루트의 `.env`에서 `VITE_NCP_CLIENT_ID`, `VITE_NCP_CLIENT_KEY` 추출 (있는 경우)
+4. 프로젝트 루트의 `.env` 파일에서 `NCP_*` 환경 변수 추출 (있는 경우)
 5. `npm install --production` 실행 (프로덕션 의존성만 설치)
-6. 코드, 의존성, `.env`(있는 경우)를 zip으로 압축하여 `/ncp/build`에 저장
-7. 임시 `.env` 파일 정리
-
-**빌드 옵션**:
-- **기본 모드** (`./build.sh`): 루트 `.env`에서 NCP 변수를 추출하여 zip에 포함
-- **보안 모드** (`./build.sh --no-env`): .env 제외, Console에서 환경 변수 설정 필요
+6. 코드, 의존성, `.env` 파일을 zip으로 압축하여 `/ncp/build`에 저장
+7. 보안을 위해 임시 `.env` 파일 삭제
 
 **주의**: 
+- 프로젝트 루트에 `.env` 파일이 있으면 자동으로 NCP 키를 추출합니다
+- `.env` 파일이 없거나 NCP 키가 없으면, 배포 후 NCP Console에서 환경 변수를 수동으로 설정해야 합니다
 - 빌드 파일은 Git에 추적되지 않습니다 (`.gitignore`에 포함됨)
 
 ## 배포

@@ -74,17 +74,18 @@ VITE_FIREBASE_APP_ID=your_app_id
 VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 VITE_FIREBASE_USE_EMULATOR=false
 
-# Naver Cloud Platform (NCP)
-VITE_NCP_CLIENT_ID=your_ncp_client_id
-VITE_NCP_CLIENT_KEY=your_ncp_client_key
+# Naver Cloud Platform (NCP) API Keys (선택 사항)
+# ⚠️ 이 키들은 NCP Cloud Functions 빌드 시에만 사용됩니다.
+# 클라이언트 실행에는 필요하지 않습니다.
+NCP_APIGW_API_KEY_ID=your_ncp_api_key_id
+NCP_APIGW_API_KEY=your_ncp_api_key
 ```
 
 **환경 변수 설명**:
 - **Firebase 설정**: 클라이언트 실행에 필수
-- **NCP 설정**: 
-  - `VITE_NCP_CLIENT_ID`: Naver Maps JavaScript API 및 Direction API Client ID
-  - `VITE_NCP_CLIENT_KEY`: Direction API Client Key
-  - 클라이언트와 NCP Functions에서 모두 사용됩니다
+- **NCP API 키**: NCP Cloud Functions를 빌드할 때만 필요 (선택 사항)
+  - 클라이언트 앱 실행에는 영향 없음
+  - `npm run ncp:build` 실행 시 사용됨
 
 **참고**: NCP Direction API 엔드포인트(호스트, 경로)는 `src/services/mapDirectionService.ts` 파일의 상수로 관리됩니다.
 
@@ -201,45 +202,27 @@ NCP_APIGW_API_KEY=your_actual_key
 
 #### 빌드 및 배포
 
-**프로덕션용** (.env 제외 - 기본, 권장 ✅):
 ```bash
+# 루트에서 빌드 (추천)
 npm run ncp:build
-```
 
-**개발/테스트용** (.env 포함 - 빠른 테스트):
-```bash
-npm run ncp:build:dev
-```
-
-또는 직접 실행:
-```bash
+# 또는 NCP 디렉토리에서 직접
 cd ncp/mapDirection
-./build.sh              # .env 제외 (기본)
-./build.sh --with-env   # .env 포함
+./build.sh
 ```
+
+빌드 시 프로젝트 루트의 `.env`에서 NCP 키를 자동으로 추출하여 패키징합니다.
 
 #### NCP Console에서 배포
 
-1. `npm run ncp:build` 또는 `npm run ncp:build:prod`로 배포 파일 생성
+1. `npm run ncp:build`로 배포 파일 생성
    - 생성 위치: `/ncp/build/mapDirection_YYYYMMDD_HHMMSS.zip`
 2. [NCP Console](https://console.ncloud.com) 로그인
 3. Services > Cloud Functions > Actions 메뉴로 이동
 4. `mapDirection` 액션 선택 (없으면 생성)
 5. '배포' 버튼 클릭 후 생성된 zip 파일 업로드
-6. **디폴트 파라미터** 탭에서 환경 변수 설정:
-   ```json
-   {
-     "NCP_APIGW_API_KEY_ID": "95uqsbhft5",
-     "NCP_APIGW_API_KEY": "M19r1m5znwNWuImEs96aURFIDF6L4cz07gdfibCY"
-   }
-   ```
 
-**보안 권장사항** 🔒: 
-- **개발/테스트**: `npm run ncp:build` (.env 포함, 빠른 배포)
-- **프로덕션**: `npm run ncp:build:prod` (.env 제외) + NCP Console에서 환경 변수 설정 ✅
-  - 더 안전함: 키가 빌드 결과물에 포함되지 않음
-  - 키 변경 용이: 재배포 없이 Console에서만 수정
-  - 환경별 키 관리 가능: dev/staging/prod 각각 다른 키 사용
+**보안 권장사항**: 프로덕션 환경에서는 빌드에 키를 포함하지 말고, NCP Console에서 직접 환경 변수를 설정하세요.
 
 자세한 내용은 [ncp/mapDirection/README.md](ncp/mapDirection/README.md)를 참고하세요.
 
@@ -332,11 +315,8 @@ npm run check:watch
 # SMUI 테마 컴파일
 npm run smui-theme
 
-# NCP Cloud Functions 빌드 (프로덕션용 - .env 제외, 기본)
+# NCP Cloud Functions 빌드
 npm run ncp:build
-
-# NCP Cloud Functions 빌드 (개발/테스트용 - .env 포함)
-npm run ncp:build:dev
 
 # NCP Cloud Functions 배포
 npm run ncp:deploy

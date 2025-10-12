@@ -915,6 +915,8 @@ async function handleLoadDirections() {
     return;
   }
 
+  console.log('split', split);
+  
   // 서비스를 통해 경로 가져오기
   const newPaths = await loadAllDirections(points, split, { option: 'traavoidcaronly' });
 
@@ -924,9 +926,8 @@ async function handleLoadDirections() {
     return;
   }
 
-  paths = newPaths;
-  drawPath(newPaths.map(point => (new naver.maps.LatLng(point[1], point[0]))));
-}
+  // 서비스를 통해 경로 가져오기
+  const newPaths = await loadAllDirections(points, split, { option: 'traavoidcaronly' });
 
 function drawPath(path: naver.maps.LatLng[]) {
   if (path.length === 0) {

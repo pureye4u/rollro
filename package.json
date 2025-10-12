@@ -12,7 +12,6 @@
 		"prepare": "npm run smui-theme",
 		"smui-theme": "smui-theme compile static/smui.css -i src/theme",
 		"ncp:build": "cd ncp/mapDirection && ./build.sh",
-		"ncp:build:dev": "cd ncp/mapDirection && ./build.sh --with-env",
 		"ncp:deploy": "cd ncp/mapDirection && ./deploy.sh"
 	},
 	"devDependencies": {
