@@ -1,6 +1,6 @@
 {
   "projects": {
-    "defalut": "rollro"
+    "default": "rollro"
   },
   "targets": {},
   "etags": {}
