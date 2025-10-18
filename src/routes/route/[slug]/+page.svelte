@@ -352,6 +352,18 @@ function showSnackbar(message: string) {
   snackbar.open();
 }
 
+function drawPath(path: naver.maps.LatLng[]) {
+  if (path.length === 0) {
+    routeLine.setMap(null);
+  } else {
+    routeLine.setOptions({
+      map: map,
+      strokeOpacity: 1,
+      path: path,
+    });
+  }
+}
+
 async function loadRouteModel() {
   // route-meta와 route-detail을 각각 조회
   const [meta, detail] = await Promise.all([
@@ -915,8 +927,6 @@ async function handleLoadDirections() {
     return;
   }
 
-  console.log('split', split);
-  
   // 서비스를 통해 경로 가져오기
   const newPaths = await loadAllDirections(points, split, { option: 'traavoidcaronly' });
 
@@ -926,19 +936,8 @@ async function handleLoadDirections() {
     return;
   }
 
-  // 서비스를 통해 경로 가져오기
-  const newPaths = await loadAllDirections(points, split, { option: 'traavoidcaronly' });
-
-function drawPath(path: naver.maps.LatLng[]) {
-  if (path.length === 0) {
-    routeLine.setMap(null);
-  } else {
-    routeLine.setOptions({
-      map: map,
-      strokeOpacity: 1,
-      path: path,
-    });
-  }
+  paths = newPaths;
+  drawPath(newPaths.map(point => (new naver.maps.LatLng(point[1], point[0]))));
 }
 
 function makeAllLinks() {
