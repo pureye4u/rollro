@@ -41,6 +41,8 @@
 	},
 	"type": "module",
 	"dependencies": {
-		"firebase": "^10.11.0"
+		"firebase": "^10.11.0",
+		"flatpickr": "^4.6.13",
+		"svelte-flatpickr": "^3.3.5"
 	}
 }
