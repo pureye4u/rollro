@@ -55,11 +55,46 @@
           <Item on:SMUI:action={() => goto(`/route/${route.id}`)}>
             <Text>
               <div class="route-item">
-                <div class="route-title">
-                  <div class="title-text">
-                    {route.title}
+                <div class="route-header">
+                  <div class="title-section">
+                    <div class="title-text">
+                      {route.title}
+                    </div>
+                    {#if route.executedDate}
+                      <div class="executed-date">
+                        실행 날짜: {formatExecutedDate(route.executedDate)}
+                      </div>
+                    {/if}
                   </div>
                   <div class="route-meta">
+                    {#if route.owner}
+                      {#if route.owner === userID}
+                        <span class="owner-name owner-self">
+                          {ownerNames[route.owner] || '로딩 중...'}
+                        </span>
+                      {:else}
+                        <button
+                          type="button"
+                          class="owner-name clickable"
+                          data-owner-id={route.owner}
+                          bind:this={ownerNameButtons[route.owner]}
+                          on:click|stopPropagation={(e) => {
+                            if (route.owner && e.currentTarget instanceof HTMLElement) {
+                              openUserMenu(route.owner, e.currentTarget);
+                            }
+                          }}
+                          on:keypress|stopPropagation={(e) => {
+                            if (route.owner && (e.key === 'Enter' || e.key === ' ') && e.currentTarget instanceof HTMLElement) {
+                              e.preventDefault();
+                              openUserMenu(route.owner, e.currentTarget);
+                            }
+                          }}
+                          aria-label="사용자 메뉴 열기"
+                        >
+                          {ownerNames[route.owner] || '로딩 중...'}
+                        </button>
+                      {/if}
+                    {/if}
                     {#if route.owner === userID}
                       <span class="badge owner">소유자</span>
                     {:else if route.editors && route.editors.includes(userID)}
@@ -77,6 +112,45 @@
           </Item>
           {/each}
         </List>
+
+        <!-- 사용자 메뉴 -->
+        <MenuSurface 
+          bind:open={userMenuOpen} 
+          bind:this={userMenuSurface}
+          class="user-menu-surface"
+          style="left: {menuPosition.left}px; bottom: {menuPosition.bottom}px;"
+        >
+          <List>
+            {#if selectedOwnerId && userID && selectedOwnerId !== userID}
+              <Item on:SMUI:action={() => {
+                if (selectedOwnerId) {
+                  userMenuOpen = false;
+                  goto(`/user/${selectedOwnerId}`);
+                }
+              }}>
+                <Text>사용자 페이지</Text>
+              </Item>
+              <Separator />
+              {#if userFollowers[selectedOwnerId]}
+                <Item on:SMUI:action={() => {
+                  if (selectedOwnerId) {
+                    removeFollower(selectedOwnerId);
+                  }
+                }}>
+                  <Text>팔로우 취소</Text>
+                </Item>
+              {:else}
+                <Item on:SMUI:action={() => {
+                  if (selectedOwnerId) {
+                    addFollower(selectedOwnerId);
+                  }
+                }}>
+                  <Text>팔로우 추가</Text>
+                </Item>
+              {/if}
+            {/if}
+          </List>
+        </MenuSurface>
 
         {#if totalPages > 1}
         <div class="pagination">
@@ -123,14 +197,16 @@
 </NavBarContainer>
 
 <script lang="ts">
-import { onMount } from 'svelte';
-import { collection, getDocs, addDoc, query, orderBy, where, serverTimestamp } from 'firebase/firestore';
-import List, { Item, Text } from '@smui/list';
-import Fab, { Label, Icon } from '@smui/fab';
+import { onMount, tick } from 'svelte';
+import { collection, getDocs, addDoc, query, orderBy, where, serverTimestamp, doc, getDoc, arrayUnion, arrayRemove, updateDoc } from 'firebase/firestore';
+import List, { Item, Text, Separator } from '@smui/list';
 import Button from '@smui/button';
+import Fab, { Label, Icon } from '@smui/fab';
 import Textfield from '@smui/textfield';
+import MenuSurface, { Anchor } from '@smui/menu-surface';
 import { goto } from '$app/navigation';
 import { db } from '$lib/firebase.client';
+import { getUsersNicknames } from '../../services/userRepository';
 import NavBarContainer from '../../components/NavBarContainer.svelte';
 import type { RouteMetaModel } from '../../models/RouteModel';
 import { canView } from '../../services/routeService';
@@ -151,6 +227,44 @@ let currentPage = 1;
 const itemsPerPage = 30;
 let totalPages = 1;
 
+// 소유자 정보 캐시
+let ownerNames: Record<string, string> = {};
+
+// 사용자 메뉴 관련
+let userMenuSurface: MenuSurface;
+let selectedOwnerId: string | null = null;
+let userMenuOpen = false;
+let userFollowers: Record<string, boolean> = {}; // ownerId -> isFollowing
+let ownerNameButtons: Record<string, HTMLButtonElement | undefined> = {};
+let menuPosition = { left: 0, bottom: 0 };
+
+async function openUserMenu(ownerId: string, button: HTMLElement) {
+  if (!userID || !ownerId || ownerId === userID) return;
+  
+  selectedOwnerId = ownerId;
+  await checkFollowerStatus(ownerId);
+  
+  // 버튼 위치 계산하여 MenuSurface 위치 설정
+  await tick();
+  if (button) {
+    const rect = button.getBoundingClientRect();
+    // getBoundingClientRect()는 viewport 기준 좌표를 반환
+    // bottom은 화면 하단에서 버튼 상단까지의 거리
+    // left는 버튼의 왼쪽 위치
+    const left = rect.left;
+    const bottom = window.innerHeight - rect.top;
+    
+    console.log('Button rect:', rect);
+    console.log('Calculated CSS position:', { left, bottom });
+    
+    // CSS 변수로 위치 설정
+    menuPosition = { left, bottom };
+    
+    // 메뉴 열기
+    userMenuOpen = true;
+  }
+}
+
 async function loadRouteList() {
   isLoading = true;
   try {
@@ -164,12 +278,95 @@ async function loadRouteList() {
       .map(doc => ({ id: doc.id, ...doc.data() } as RouteMetaModel))
       .filter(route => canView(route, userID));
     
+    // 소유자 정보 로드
+    await loadOwnerNames();
+    
     extractAvailableYears();
     applyFilters();
   } catch (error) {
     console.error('Error loading routes:', error);
   } finally {
     isLoading = false;
+  }
+}
+
+async function loadOwnerNames() {
+  const ownerIds = new Set<string>();
+  allRoutes.forEach(route => {
+    if (route.owner) {
+      ownerIds.add(route.owner);
+    }
+  });
+  
+  const uniqueOwnerIds = Array.from(ownerIds);
+  if (uniqueOwnerIds.length === 0) return;
+  
+  // 리포지터리 패턴을 사용하여 nickname 조회 (캐시 포함, 5분 유지)
+  const nicknames = await getUsersNicknames(uniqueOwnerIds);
+  
+  // 결과를 ownerNames에 반영
+  uniqueOwnerIds.forEach(ownerId => {
+    ownerNames[ownerId] = nicknames[ownerId] || '알 수 없음';
+  });
+}
+
+/**
+ * 특정 사용자가 현재 사용자를 follower로 가지고 있는지 확인
+ */
+async function checkFollowerStatus(ownerId: string): Promise<void> {
+  if (!userID || !ownerId || ownerId === userID) {
+    userFollowers[ownerId] = false;
+    return;
+  }
+  
+  try {
+    const userDoc = await getDoc(doc(db, 'user', ownerId));
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      const followers = userData.followers || [];
+      userFollowers[ownerId] = Array.isArray(followers) && followers.includes(userID);
+    } else {
+      userFollowers[ownerId] = false;
+    }
+  } catch (error) {
+    console.error(`Error checking follower status for ${ownerId}:`, error);
+    userFollowers[ownerId] = false;
+  }
+}
+
+/**
+ * 사용자를 follower로 추가
+ */
+async function addFollower(ownerId: string) {
+  if (!userID || !ownerId || ownerId === userID) return;
+  
+  try {
+    const userRef = doc(db, 'user', ownerId);
+    await updateDoc(userRef, {
+      followers: arrayUnion(userID)
+    });
+    userFollowers[ownerId] = true;
+    userMenuOpen = false;
+  } catch (error) {
+    console.error(`Error adding follower for ${ownerId}:`, error);
+  }
+}
+
+/**
+ * follower 제거
+ */
+async function removeFollower(ownerId: string) {
+  if (!userID || !ownerId || ownerId === userID) return;
+  
+  try {
+    const userRef = doc(db, 'user', ownerId);
+    await updateDoc(userRef, {
+      followers: arrayRemove(userID)
+    });
+    userFollowers[ownerId] = false;
+    userMenuOpen = false;
+  } catch (error) {
+    console.error(`Error removing follower for ${ownerId}:`, error);
   }
 }
 
@@ -351,6 +548,19 @@ async function createRoute(): Promise<string | undefined> {
 }
 
 export let data;
+
+function formatExecutedDate(dateString: string): string {
+  if (!dateString) return '';
+  try {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}.${month}.${day}`;
+  } catch (e) {
+    return dateString;
+  }
+}
 </script>
 
 <style>
@@ -476,7 +686,7 @@ export let data;
   width: 100%;
 }
 
-.route-title {
+.route-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -484,17 +694,26 @@ export let data;
   width: 100%;
 }
 
-.title-text {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-  font-size: 16px;
+.title-section {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.title-text {
+  font-weight: 500;
+  font-size: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.executed-date {
+  font-size: 12px;
+  line-height: 1.25;
+  color: #666;
 }
 
 .route-meta {
@@ -505,6 +724,31 @@ export let data;
   color: #666;
   flex-shrink: 0;
 }
+
+.owner-name {
+  font-size: 12px;
+  color: #666;
+  margin-right: 4px;
+}
+.owner-name.clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(0, 0, 0, 0.2);
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+.owner-name.clickable:hover {
+  color: #333;
+  text-decoration-color: rgba(0, 0, 0, 0.4);
+}
+.owner-name.owner-self {
+  color: #999;
+  text-decoration: none;
+}
+
 
 .badge {
   padding: 2px 8px;
@@ -600,5 +844,32 @@ export let data;
 
 :global(.floating-control .mdc-fab) {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* MenuSurface가 다른 요소 위에 표시되도록 */
+:global(.user-menu-surface.mdc-menu-surface) {
+  z-index: 1000 !important;
+  position: fixed !important;
+  top: auto !important;
+  height: fit-content !important;
+  max-height: 400px !important;
+  overflow-y: auto !important;
+  transform-origin: left bottom !important;
+}
+
+:global(.user-menu-surface.mdc-menu-surface--open) {
+  z-index: 1000 !important;
+}
+
+/* 메뉴 아이템 스타일 조정 */
+:global(.user-menu-surface .mdc-list-item) {
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+  height: 40px !important;
+  font-size: 14px !important;
+}
+
+:global(.user-menu-surface .mdc-list-item__text) {
+  font-size: 14px !important;
 }
 </style>

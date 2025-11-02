@@ -18,6 +18,7 @@ export interface RouteMetaModel {
   isPublic?: boolean;
   createdAt?: any;
   year?: number;
+  executedDate?: string; // 실행 날짜 (ISO 8601 형식: YYYY-MM-DD)
   pointsCount?: number;
 }
 

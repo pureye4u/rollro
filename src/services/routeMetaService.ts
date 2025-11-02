@@ -16,6 +16,7 @@ export async function createRouteMeta(routeId: string, meta: RouteMetaModel): Pr
     isPublic: meta.isPublic || false,
     createdAt: meta.createdAt,
     year: meta.year,
+    executedDate: meta.executedDate,
     pointsCount: meta.pointsCount || 0,
   };
 
@@ -61,6 +62,9 @@ export async function updateRouteMeta(routeId: string, meta: Partial<RouteMetaMo
   }
   if (meta.year !== undefined) {
     updateData.year = meta.year;
+  }
+  if (meta.executedDate !== undefined) {
+    updateData.executedDate = meta.executedDate;
   }
   if (meta.pointsCount !== undefined) {
     updateData.pointsCount = meta.pointsCount;

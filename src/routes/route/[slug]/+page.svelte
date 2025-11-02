@@ -73,6 +73,26 @@
 </Dialog>
 
 <Dialog
+  bind:open={isOpenCancelDialog}
+  aria-labelledby="cancelTitle"
+  aria-describedby="cancelContent"
+>
+  <Title id="cancelTitle">변경 사항 취소</Title>
+  <Content id="cancelContent">
+    <p>모든 변경 사항이 저장하기 이전 상태로 초기화됩니다.</p>
+    <p>계속하시겠습니까?</p>
+  </Content>
+  <Actions>
+    <Button color="secondary">
+      <Label>아니오</Label>
+    </Button>
+    <Button on:click={confirmCancelEdit} action="accept">
+      <Label>예</Label>
+    </Button>
+  </Actions>
+</Dialog>
+
+<Dialog
   bind:open={isOpenImportURLDialog}
   aria-labelledby="importURLTitle"
   aria-describedby="importURLContent"
@@ -125,14 +145,14 @@
       </div>
       <List class="user-list" dense>
         {#each editingEditors as editor}
-        <Item>
+        <ItemWithMeta>
           <Text>{editor}</Text>
           <span slot="meta">
             <Button on:click={() => removeEditor(editor)}>
               <Icon class="material-icons">close</Icon>
             </Button>
           </span>
-        </Item>
+        </ItemWithMeta>
         {/each}
       </List>
     </div>
@@ -152,14 +172,14 @@
       </div>
       <List class="user-list" dense>
         {#each editingViewers as viewer}
-        <Item>
+        <ItemWithMeta>
           <Text>{viewer}</Text>
           <span slot="meta">
             <Button on:click={() => removeViewer(viewer)}>
               <Icon class="material-icons">close</Icon>
             </Button>
           </span>
-        </Item>
+        </ItemWithMeta>
         {/each}
       </List>
     </div>
@@ -179,7 +199,7 @@
 </Snackbar>
 
 <div class="container">
-	<header class:open={editMode}>
+	<header class:open={headerOpen}>
     <nav>
       <Fab class="nav-btn" color="primary" on:click={() => history.back()}>
         <Icon class="material-icons">arrow_back</Icon>
@@ -205,58 +225,93 @@
         </button>
       </li>
       {/each}
-		</ul>
+    </ul>
     <div class="bottom">
-      <div class="point-action">
-        <Fab color="secondary" on:click={removeAlldPoint} mini disabled={points.length === 0}>
-          <Icon class="material-icons">playlist_remove</Icon>
-        </Fab>
-        <Fab color="secondary" on:click={removeSelectedPoint} mini>
-          <Icon class="material-icons">remove</Icon>
-        </Fab>
-        <Fab color="primary" on:click={moveSelectedPointDown} mini disabled={selectedPointIndex === (points.length - 1)}>
-          <Icon class="material-icons">arrow_drop_down</Icon>
-        </Fab>
-        <Fab color="primary" on:click={moveSelectedPointUp} mini disabled={selectedPointIndex === 0}>
-          <Icon class="material-icons">arrow_drop_up</Icon>
-        </Fab>
-        <Fab color="primary" on:click={addCurrentPoint} mini>
-          <Icon class="material-icons">add</Icon>
-        </Fab>
-        <Fab color="primary" on:click={openImportURLDialog} mini>
-          <Icon class="material-icons">input</Icon>
-        </Fab>
+      <div class="date-action">
+        <Textfield 
+          type="date" 
+          bind:value={executedDate} 
+          label="실행 날짜" 
+          disabled={!editMode}
+          placeholder={executedDate ? '' : '미정'}
+        />
       </div>
+      {#if editMode}
+        <div class="point-action">
+          <div class="tooltip-wrapper" title="모든 지점 삭제">
+            <Fab color="secondary" on:click={removeAlldPoint} mini disabled={points.length === 0}>
+              <Icon class="material-icons">playlist_remove</Icon>
+            </Fab>
+          </div>
+          <div class="tooltip-wrapper" title="선택한 지점 삭제">
+            <Fab color="secondary" on:click={removeSelectedPoint} mini>
+              <Icon class="material-icons">remove</Icon>
+            </Fab>
+          </div>
+          <div class="tooltip-wrapper" title="선택한 지점 아래로 이동">
+            <Fab color="primary" on:click={moveSelectedPointDown} mini disabled={selectedPointIndex === (points.length - 1)}>
+              <Icon class="material-icons">arrow_drop_down</Icon>
+            </Fab>
+          </div>
+          <div class="tooltip-wrapper" title="선택한 지점 위로 이동">
+            <Fab color="primary" on:click={moveSelectedPointUp} mini disabled={selectedPointIndex === 0}>
+              <Icon class="material-icons">arrow_drop_up</Icon>
+            </Fab>
+          </div>
+          <div class="tooltip-wrapper" title="현재 위치에 지점 추가">
+            <Fab color="primary" on:click={addCurrentPoint} mini>
+              <Icon class="material-icons">add</Icon>
+            </Fab>
+          </div>
+          <div class="tooltip-wrapper" title="네이버 지도 URL에서 경로 가져오기">
+            <Fab color="primary" on:click={openImportURLDialog} mini>
+              <Icon class="material-icons">input</Icon>
+            </Fab>
+          </div>
+        </div>
+      {/if}
       <div class="route-action">
-        <Fab color="primary" on:click={showAllPoints} mini>
-          <Icon class="material-icons">zoom_out_map</Icon>
-        </Fab>
-        <Fab color="primary" on:click={handleLoadDirections} mini>
-          <Icon class="material-icons">route</Icon>
-        </Fab>
-        <Fab color="primary" on:click={makeAllLinks} mini>
-          <Icon class="material-icons">link</Icon>
-        </Fab>
-        {#if canManagePermissions(model, userID)}
-        <Fab color="primary" on:click={openPermissionDialog} mini>
-          <Icon class="material-icons">share</Icon>
-        </Fab>
+        <div class="tooltip-wrapper tooltip-right-align" title="모든 지점이 보이도록 지도 조정">
+          <Fab color="primary" on:click={showAllPoints} mini>
+            <Icon class="material-icons">zoom_out_map</Icon>
+          </Fab>
+        </div>
+        {#if editMode}
+          <div class="tooltip-wrapper" title="경로 자동 생성">
+            <Fab color="primary" on:click={handleLoadDirections} mini>
+              <Icon class="material-icons">route</Icon>
+            </Fab>
+          </div>
+          <div class="tooltip-wrapper" title="모든 경로 링크 생성">
+            <Fab color="primary" on:click={makeAllLinks} mini>
+              <Icon class="material-icons">link</Icon>
+            </Fab>
+          </div>
+          {#if canManagePermissions(model, userID)}
+          <div class="tooltip-wrapper" title="권한 관리">
+            <Fab color="primary" on:click={openPermissionDialog} mini>
+              <Icon class="material-icons">share</Icon>
+            </Fab>
+          </div>
+          {/if}
+          {#if canDelete(model, userID)}
+          <div class="tooltip-wrapper" title="여정 삭제">
+            <Fab color="secondary" on:click={deleteRoute} mini>
+              <Icon class="material-icons">delete</Icon>
+            </Fab>
+          </div>
+          {/if}
+          <Button on:click={saveEdit} variant="raised" color="secondary" disabled={!hasUnsavedChanges}>
+            <Label>저장</Label>
+          </Button>
+          <Button on:click={cancelEdit} variant="raised" color="primary" disabled={!hasUnsavedChanges}>
+            <Label>취소</Label>
+          </Button>
         {/if}
-        {#if canDelete(model, userID)}
-        <Fab color="secondary" on:click={deleteRoute} mini>
-          <Icon class="material-icons">delete</Icon>
-        </Fab>
-        {/if}
-        <Button on:click={saveEdit} variant="raised" color="secondary">
-          <Label>저장</Label>
-        </Button>
-        <Button on:click={cancelEdit} variant="raised" color="primary">
-          <Label>취소</Label>
-        </Button>
       </div>
     </div>
-    <button class="drawer" on:click={toggleEdit}>
-      <Icon class="material-icons">{editMode ? 'arrow_back' : 'arrow_forward'}</Icon>
+    <button class="drawer" on:click={toggleHeader}>
+      <Icon class="material-icons">{headerOpen ? 'arrow_back' : 'arrow_forward'}</Icon>
     </button>
 	</header>
   <main>
@@ -287,6 +342,9 @@ import Fab, { Label, Icon } from '@smui/fab';
 import Switch from '@smui/switch';
 import Snackbar from '@smui/snackbar';
 import List, { Item, Text } from '@smui/list';
+
+// @ts-ignore - SMUI List Item supports meta slot but TypeScript types are incomplete
+const ItemWithMeta = Item as any;
 import { db } from '$lib/firebase.client';
 import type { Point, RouteModel } from '../../../models/RouteModel';
 import { canEdit, canDelete, canManagePermissions, getUserPermission } from '../../../services/routeService';
@@ -312,16 +370,38 @@ let userPermission: RoutePermission;
 
 let userID: string;
 let title = '';
+let executedDate = ''; // 실행 날짜 (YYYY-MM-DD 형식)
 let snackbar: Snackbar;
 let snackbarMessage = '';
 const maxPoints = 6;
+
+// 초기 상태 저장 (변경 감지 및 취소 시 복원용)
+let initialTitle = '';
+let initialExecutedDate = '';
+let initialPoints: Point[] = [];
+let initialSplit: number[] = [];
+let initialPaths: number[][] = [];
+let initialLinks: (string | null)[] = [];
+
+// 변경 감지 (reactive) - 모든 상태 변경을 감지하도록 의존성 명시
+$: hasUnsavedChanges = editMode && (
+  title !== initialTitle ||
+  executedDate !== initialExecutedDate ||
+  points.length !== initialPoints.length ||
+  JSON.stringify(points) !== JSON.stringify(initialPoints) ||
+  JSON.stringify(split) !== JSON.stringify(initialSplit) ||
+  JSON.stringify(paths) !== JSON.stringify(initialPaths) ||
+  JSON.stringify(links) !== JSON.stringify(initialLinks)
+);
 let isOpenSearchDialog = false;
 let isOpenPointEditDialog = false;
 let isPointEditDialogCoordModeEPSG4236 = false;
 let isOpenDeleteDialog = false;
+let isOpenCancelDialog = false;
 let isOpenImportURLDialog = false;
 let isOpenPermissionDialog = false;
 let editMode: boolean = false;
+let headerOpen: boolean = false;
 let selectedPointIndex = -1;
 let editingPointIndex = -1;
 let editingPointTitle = '';
@@ -393,6 +473,7 @@ async function loadRouteModel() {
   }
   
   title = model.title;
+  executedDate = model.executedDate || '';
   if (Array.isArray(model.split)) {
     split = model.split;
   } else {
@@ -407,9 +488,17 @@ async function loadRouteModel() {
   if (Array.isArray(model.links)) {
     links = model.links;
   }
-  if (Array.isArray(model.points)) {
+  
+  // 초기 상태 저장
+  saveInitialState();
+  if (Array.isArray(model.points) && model.points.length > 0) {
     applyPoints(model.points);
     showAllPoints();
+  } else {
+    // points가 없거나 빈 배열인 경우 기본 줌 레벨로 설정
+    const defaultCenter = new naver.maps.LatLng(37.5666805, 126.9784147);
+    map.setCenter(defaultCenter);
+    map.setZoom(10);
   }
   
   // 권한이 없으면 편집 모드로 전환되지 않도록
@@ -425,12 +514,25 @@ async function saveRouteModel(): Promise<boolean> {
       points,
       split,
       paths: paths.map(path => ({ lat: path[1], lng: path[0] } as Point)),
-      links,
+      links: links.filter((link): link is string => link !== null),
     });
+    
+    // 실행 날짜의 연도와 현재 year 비교하여 동기화
+    let yearToUpdate = model.year;
+    if (executedDate) {
+      const executedYear = new Date(executedDate).getFullYear();
+      if (model.year !== executedYear) {
+        yearToUpdate = executedYear;
+      }
+    } else if (executedDate === '' && model.executedDate) {
+      // 실행 날짜가 삭제된 경우, year는 유지 (필요시 변경 가능)
+    }
     
     // route-meta 업데이트 (메타데이터)
     await updateRouteMeta(data.id, {
       title,
+      executedDate: executedDate || undefined,
+      year: yearToUpdate,
       pointsCount: points.length,
     });
     
@@ -667,23 +769,50 @@ function startEdit() {
   // 편집 권한이 없으면 편집 모드로 전환하지 않음
   if (!canEdit(model, userID)) {
     showSnackbar('편집 권한이 없습니다.');
+    headerOpen = true; // 권한은 없지만 header는 열 수 있도록
     return;
   }
   editMode = true;
+  headerOpen = true;
   resetEditData();
+  // 편집 시작 시 초기 상태 저장
+  saveInitialState();
 }
 
 async function saveEdit() {
   if (await saveRouteModel()) {
-    editMode = false;
-    resetEditData();
+    // 저장 후 model을 업데이트하여 최신 데이터 반영
+    model.title = title;
+    model.executedDate = executedDate || undefined;
+    // year는 saveRouteModel에서 이미 계산됨
+    
+    // 저장 후 초기 상태를 현재 상태로 업데이트 (변경 감지 리셋)
+    saveInitialState();
+    
+    // 편집 모드는 유지 (저장 후에도 계속 편집 가능)
     showSnackbar('저장되었습니다.');
   }
 }
 
 function cancelEdit() {
-  editMode = false;
+  if (hasChanges()) {
+    // 변경 사항이 있으면 확인 다이얼로그 표시
+    isOpenCancelDialog = true;
+  } else {
+    // 변경 사항이 없으면 바로 취소 (실제로는 할 일이 없음)
+    resetEditData();
+  }
+}
+
+function confirmCancelEdit() {
+  // 변경 사항이 있으면 초기 상태로 복원
+  if (hasChanges()) {
+    restoreInitialState();
+  }
+  // editMode는 유지 (취소해도 편집 모드 계속 유지)
+  // header는 닫지 않음 (보기 전용에서도 header 열 수 있도록)
   resetEditData();
+  isOpenCancelDialog = false;
 }
 
 function toggleEdit() {
@@ -691,6 +820,18 @@ function toggleEdit() {
     cancelEdit()
   } else {
     startEdit()
+  }
+}
+
+function toggleHeader() {
+  headerOpen = !headerOpen;
+  // header가 열릴 때 편집 가능하면 편집 모드로 전환
+  if (headerOpen && canEdit(model, userID) && !editMode) {
+    startEdit();
+  }
+  // header가 닫힐 때 편집 모드 해제
+  if (!headerOpen && editMode) {
+    cancelEdit();
   }
 }
 
@@ -702,6 +843,85 @@ function resetEditData() {
   editingPointLng = 0;
   editingPointX = 0;
   editingPointY = 0;
+}
+
+// 초기 상태 저장
+function saveInitialState() {
+  initialTitle = title;
+  initialExecutedDate = executedDate;
+  initialPoints = JSON.parse(JSON.stringify(points));
+  initialSplit = [...split];
+  initialPaths = paths.map(path => [...path]);
+  initialLinks = [...links];
+}
+
+// 변경 사항 감지
+function hasChanges(): boolean {
+  // title 비교
+  if (title !== initialTitle) return true;
+  
+  // executedDate 비교
+  if (executedDate !== initialExecutedDate) return true;
+  
+  // points 비교
+  if (points.length !== initialPoints.length) return true;
+  for (let i = 0; i < points.length; i++) {
+    if (points[i].title !== initialPoints[i]?.title ||
+        Math.abs(points[i].lat - initialPoints[i]?.lat || 0) > 0.000001 ||
+        Math.abs(points[i].lng - initialPoints[i]?.lng || 0) > 0.000001) {
+      return true;
+    }
+  }
+  
+  // split 비교
+  if (split.length !== initialSplit.length) return true;
+  for (let i = 0; i < split.length; i++) {
+    if (split[i] !== initialSplit[i]) return true;
+  }
+  
+  // paths 비교
+  if (paths.length !== initialPaths.length) return true;
+  for (let i = 0; i < paths.length; i++) {
+    if (paths[i].length !== initialPaths[i]?.length) return true;
+    for (let j = 0; j < paths[i].length; j++) {
+      if (Math.abs(paths[i][j] - (initialPaths[i]?.[j] || 0)) > 0.000001) {
+        return true;
+      }
+    }
+  }
+  
+  // links 비교
+  if (links.length !== initialLinks.length) return true;
+  for (let i = 0; i < links.length; i++) {
+    if (links[i] !== initialLinks[i]) return true;
+  }
+  
+  return false;
+}
+
+// 초기 상태로 복원
+function restoreInitialState() {
+  title = initialTitle;
+  executedDate = initialExecutedDate;
+  
+  // points 복원
+  points = JSON.parse(JSON.stringify(initialPoints));
+  // markers 재생성 (applyPoints와 동일한 로직)
+  markers.forEach(marker => marker.setMap(null));
+  markers = [];
+  applyPoints(initialPoints);
+  
+  // split 복원
+  split = [...initialSplit];
+  
+  // paths 복원
+  paths = initialPaths.map(path => [...path]);
+  drawPath(paths.map(point => new naver.maps.LatLng(point[1], point[0])));
+  
+  // links 복원
+  links = [...initialLinks];
+  
+  selectedPointIndex = -1;
 }
 
 function completeEditing() {
@@ -771,6 +991,14 @@ function setPoint(index: number, lat: number, lng: number, title?: string) {
 }
 
 function showAllPoints() {
+  if (points.length === 0) {
+    // points가 없는 경우 기본 줌 레벨로 설정
+    const defaultCenter = new naver.maps.LatLng(37.5666805, 126.9784147);
+    map.setCenter(defaultCenter);
+    map.setZoom(10);
+    return;
+  }
+  
   let min = points.reduce((point, current) => {
     return { lat: Math.min(point.lat, current.lat), lng: Math.min(point.lng, current.lng) } as Point;
   }, { lat: Number.MAX_SAFE_INTEGER, lng: Number.MAX_SAFE_INTEGER } as Point);
@@ -1016,7 +1244,7 @@ function initMap() {
 
   map = new naver.maps.Map('map', {
       center: center,
-      zoom: 14
+      zoom: 10
   });
 
   naver.maps.Event.addListener(map, 'click', function(e) {
@@ -1063,6 +1291,20 @@ header {
   transition: width .5s;
 }
 
+/* Dialog가 header 위에 표시되도록 */
+:global(.mdc-dialog) {
+  z-index: 1000 !important;
+}
+
+:global(.mdc-dialog__scrim) {
+  z-index: 999 !important;
+}
+
+:global(.mdc-dialog__surface) {
+  z-index: 1001 !important;
+  position: relative;
+}
+
 header.open {
   width: 400px;
   box-shadow:
@@ -1094,6 +1336,7 @@ header.open nav {
   background-color: #fff;
 }
 
+.bottom .date-action,
 .bottom .point-action,
 .bottom .route-action {
   padding: 10px;
@@ -1106,10 +1349,75 @@ header.open nav {
 
 .bottom .route-action {
   text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 :global(.bottom .route-action > button) {
   vertical-align: middle;
+}
+
+.bottom .route-action .tooltip-wrapper {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+/* 툴팁 스타일 - wrapper를 사용하여 버튼에 영향 없이 표시 */
+.tooltip-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+/* 커스텀 툴팁 - absolute positioning으로 버튼 레이아웃에 영향 없음 */
+.tooltip-wrapper:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  background-color: rgba(0, 0, 0, 0.87);
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 10000;
+  opacity: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 오른쪽 정렬 툴팁 - 컨테이너 안에 완전히 들어오도록 조정 */
+.tooltip-wrapper.tooltip-right-align:hover::after {
+  left: auto;
+  left: 0;
+  transform: none;
+  /* 툴팁이 컨테이너를 넘지 않도록 */
+  max-width: 350px;
+  word-wrap: break-word;
+}
+
+.tooltip-wrapper.tooltip-right-align:hover::before {
+  left: auto;
+  right: 20px;
+  transform: none;
+}
+
+/* 툴팁 화살표 */
+.tooltip-wrapper:hover::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.87);
+  pointer-events: none;
+  z-index: 10001;
 }
 
 button.drawer {
@@ -1208,6 +1516,11 @@ ul.menu > li > button.icon {
   padding: 8px;
 }
 
+/* header가 닫혔을 때 editPoint와 toggleSplit 버튼 숨김 */
+header:not(.open) ul.menu > li > button.icon {
+  display: none;
+}
+
 ul.menu > li:first-of-type {
   z-index: 9;
 }
@@ -1232,8 +1545,11 @@ main {
   box-sizing: border-box;
   top: 10px;
   left: 80px;
-  height: 56px;
+  min-height: 56px;
   user-select: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 :global(.title-layer > label) {

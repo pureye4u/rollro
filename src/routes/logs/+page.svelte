@@ -7,7 +7,7 @@
       </Fab>
       {#if editMode}
         <button class="date-range-btn" on:click={openDateDialog}>
-          <Icon class="material-icons">date_range</Icon>
+          <Icon class="material-icons">filter_list</Icon>
           <span>{formatDateRange(startDate, endDate)}</span>
         </button>
       {/if}
@@ -64,22 +64,68 @@
 </div>
 
 <Dialog bind:open={dateDialogOpen}>
-  <Title>날짜 기간 선택</Title>
+  <Title>경로 표시 조건</Title>
   <Content>
     <div class="date-selector">
-      <div class="date-field">
-        <label>시작일</label>
-        <div class="calendar-container" bind:this={startDateContainer}></div>
+      <div class="filter-section">
+        <div class="switch-row">
+          <span>내 경로만 보기</span>
+          <Switch bind:checked={showMyRoutesOnly} on:change={handleFilterChange} />
+        </div>
       </div>
-      <div class="date-field">
-        <label>종료일</label>
-        <div class="calendar-container" bind:this={endDateContainer}></div>
+      <div class="date-input-section">
+        <div class="date-row">
+          <span class="date-label">시작</span>
+          <div class="date-input-group">
+            <Textfield
+              type="number"
+              bind:value={tempStartYear}
+              label="년도"
+              style="width: 100px;"
+              on:change={() => validateYearMonth('start')}
+              class="number-input"
+            />
+            <Textfield
+              type="number"
+              bind:value={tempStartMonth}
+              label="월"
+              style="width: 80px;"
+              on:change={() => validateYearMonth('start')}
+              class="number-input"
+            />
+          </div>
+        </div>
+        <div class="date-row">
+          <span class="date-label">종료</span>
+          <div class="date-input-group">
+            <Textfield
+              type="number"
+              bind:value={tempEndYear}
+              label="년도"
+              style="width: 100px;"
+              on:change={() => validateYearMonth('end')}
+              class="number-input"
+            />
+            <Textfield
+              type="number"
+              bind:value={tempEndMonth}
+              label="월"
+              style="width: 80px;"
+              on:change={() => validateYearMonth('end')}
+              class="number-input"
+            />
+          </div>
+        </div>
       </div>
     </div>
   </Content>
   <Actions>
-    <Button on:click={cancelDateSelection} variant="text">취소</Button>
-    <Button on:click={applyDateSelection} variant="text" color="primary">적용</Button>
+    <Button color="secondary">
+      <Label>취소</Label>
+    </Button>
+    <Button on:click={applyDateSelection} action="accept">
+      <Label>적용</Label>
+    </Button>
   </Actions>
 </Dialog>
 
@@ -96,9 +142,8 @@ import { Label as SnackbarLabel } from '@smui/snackbar';
 import Button from '@smui/button';
 import Dialog, { Title, Content, Actions } from '@smui/dialog';
 import Snackbar from '@smui/snackbar';
-import flatpickr from 'flatpickr';
-import { Korean } from 'flatpickr/dist/l10n/ko';
-import 'flatpickr/dist/flatpickr.css';
+import Textfield from '@smui/textfield';
+import Switch from '@smui/switch';
 import { db } from '$lib/firebase.client';
 import type { Point, RouteModel, RouteMetaModel } from '../../models/RouteModel';
 import { canView } from '../../services/routeService';
@@ -118,14 +163,16 @@ const DATE_RANGE_STORAGE_KEY = 'logs-date-range';
 let startDate: Date;
 let endDate: Date;
 let dateDialogOpen: boolean = false;
-let tempStartDate: Date | null = null;
-let tempEndDate: Date | null = null;
-let startDateContainer: HTMLDivElement;
-let endDateContainer: HTMLDivElement;
-let startDateInstance: flatpickr.Instance | null = null;
-let endDateInstance: flatpickr.Instance | null = null;
+let tempStartYear: number | null = null;
+let tempStartMonth: number | null = null;
+let tempEndYear: number | null = null;
+let tempEndMonth: number | null = null;
+let selectingField: 'startYear' | 'startMonth' | 'endYear' | 'endMonth' | null = null;
 let snackbar: Snackbar;
 let snackbarMessage: string = '';
+let yearPickerPage: number = 0;
+let monthPickerPage: number = 0;
+let showMyRoutesOnly: boolean = false;
 
 onMount(async () => {
   // 사용자 정보 가져오기
@@ -188,6 +235,11 @@ async function loadAvailableRoutes() {
           return false;
         }
         
+        // 내 경로만 보기 필터링
+        if (showMyRoutesOnly && route.owner !== userID) {
+          return false;
+        }
+        
         // 날짜 범위 필터링
         if (startDate && endDate && route.createdAt) {
           let routeDate: Date;
@@ -226,6 +278,31 @@ async function loadAvailableRoutes() {
       });
   } catch (error) {
     console.error('Error loading routes:', error);
+  }
+}
+
+async function handleFilterChange() {
+  // 필터 변경 시 route 목록 다시 로드
+  await loadAvailableRoutes();
+  
+  // 현재 선택된 route 중 유효하지 않은 것 제거
+  const validRouteIds = availableRoutes.map(route => route.id || '').filter(id => id !== '');
+  selectedRoutes = selectedRoutes.filter(id => validRouteIds.includes(id));
+  
+  // 유효한 route만 지도에 표시
+  routeLines.forEach((line, routeId) => {
+    if (!validRouteIds.includes(routeId)) {
+      line.setMap(null);
+      routeLines.delete(routeId);
+    }
+  });
+  
+  // 스토리지에 저장
+  saveSelectedRoutesToStorage(selectedRoutes);
+  
+  // 선택된 경로에 맞게 줌 조정
+  if (selectedRoutes.length > 0) {
+    await showAllSelectedRoutes();
   }
 }
 
@@ -444,9 +521,6 @@ function toggleEdit() {
 // 날짜 관련 함수들
 function initializeDateRange() {
   const now = new Date();
-  const oneYearAgo = new Date(now);
-  oneYearAgo.setFullYear(now.getFullYear() - 1);
-  oneYearAgo.setDate(1); // 월의 첫 날로 설정
   
   // 저장된 날짜 범위 불러오기
   const savedRange = loadDateRangeFromStorage();
@@ -454,8 +528,19 @@ function initializeDateRange() {
     startDate = new Date(savedRange.startDate);
     endDate = new Date(savedRange.endDate);
   } else {
+    // 기본값: 1년 전 월의 첫날부터 현재 월의 마지막날까지
+    const oneYearAgo = new Date(now);
+    oneYearAgo.setFullYear(now.getFullYear() - 1);
+    oneYearAgo.setMonth(now.getMonth()); // 같은 월로 설정
+    oneYearAgo.setDate(1); // 월의 첫 날로 설정
+    oneYearAgo.setHours(0, 0, 0, 0);
+    
     startDate = oneYearAgo;
-    endDate = now;
+    
+    // 현재 월의 마지막날
+    const endOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    endOfCurrentMonth.setHours(23, 59, 59, 999);
+    endDate = endOfCurrentMonth;
   }
 }
 
@@ -465,117 +550,138 @@ function formatMonthDate(date: Date): string {
   return `${year}.${month}`;
 }
 
-async function openDateDialog() {
-  // 임시 값 초기화
-  tempStartDate = startDate ? new Date(startDate) : null;
-  tempEndDate = endDate ? new Date(endDate) : null;
+function openDateDialog() {
+  // 임시 값 초기화 - startDate와 endDate에서 년/월 추출
+  if (startDate) {
+    tempStartYear = startDate.getFullYear();
+    tempStartMonth = startDate.getMonth() + 1;
+  } else {
+    tempStartYear = null;
+    tempStartMonth = null;
+  }
+  
+  if (endDate) {
+    tempEndYear = endDate.getFullYear();
+    tempEndMonth = endDate.getMonth() + 1;
+  } else {
+    tempEndYear = null;
+    tempEndMonth = null;
+  }
+  
+  selectingField = null;
+  yearPickerPage = 0;
+  monthPickerPage = 0;
   
   dateDialogOpen = true;
-  
-  // 다이얼로그가 완전히 렌더링될 때까지 대기
-  await tick();
-  
-  // Flatpickr 초기화
-  setTimeout(() => {
-    initDatePickers();
-  }, 300);
 }
 
-function initDatePickers() {
-  // 기존 인스턴스 제거
-  if (startDateInstance) {
-    startDateInstance.destroy();
-    startDateInstance = null;
+function openPicker(field: 'startYear' | 'startMonth' | 'endYear' | 'endMonth') {
+  selectingField = field;
+  
+  // 페이지 초기화 (현재 값이 있으면 그 값이 중심에 오도록)
+  if (field.includes('Year')) {
+    yearPickerPage = 0;
+  } else {
+    monthPickerPage = 0;
   }
-  if (endDateInstance) {
-    endDateInstance.destroy();
-    endDateInstance = null;
+}
+
+function getCurrentValue(): number | null {
+  if (!selectingField) return null;
+  
+  if (selectingField === 'startYear') return tempStartYear;
+  if (selectingField === 'startMonth') return tempStartMonth;
+  if (selectingField === 'endYear') return tempEndYear;
+  if (selectingField === 'endMonth') return tempEndMonth;
+  
+  return null;
+}
+
+function getPickerItems(): number[] {
+  if (!selectingField) return [];
+  
+  const isYear = selectingField.includes('Year');
+  const currentValue = getCurrentValue();
+  
+  if (isYear) {
+    // 년도: 현재 값 기준 앞뒤 10개씩 (없으면 현재 년도 기준)
+    const baseYear = currentValue || new Date().getFullYear();
+    const centerYear = baseYear + (yearPickerPage * 21); // 페이지당 21개씩 이동
+    const items: number[] = [];
+    
+    // 앞 10개 + 현재 + 뒤 10개 = 총 21개
+    for (let i = -10; i <= 10; i++) {
+      items.push(centerYear + i);
+    }
+    
+    return items;
+  } else {
+    // 월: 1-12 모두 표시 (페이징 불필요)
+    return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  }
+}
+
+function changePage(direction: number) {
+  if (!selectingField) return;
+  
+  if (selectingField.includes('Year')) {
+    yearPickerPage += direction;
+    // 제한 없이 페이지 이동 가능
+  } else {
+    monthPickerPage += direction;
+    // 제한 없이 페이지 이동 가능
+  }
+}
+
+function selectPickerItem(item: number) {
+  if (!selectingField) return;
+  
+  if (selectingField === 'startYear') {
+    tempStartYear = item;
+    validateYearMonth('start');
+  } else if (selectingField === 'startMonth') {
+    tempStartMonth = item;
+    validateYearMonth('start');
+  } else if (selectingField === 'endYear') {
+    tempEndYear = item;
+    validateYearMonth('end');
+  } else if (selectingField === 'endMonth') {
+    tempEndMonth = item;
+    validateYearMonth('end');
   }
   
-  // 시작일 달력 초기화
-  if (startDateContainer) {
-    startDateInstance = flatpickr(startDateContainer, {
-      dateFormat: 'Y.m.d',
-      locale: Korean,
-      maxDate: tempEndDate || new Date(),
-      disableMobile: true,
-      allowInput: false,
-      inline: true,
-      static: true,
-      defaultDate: tempStartDate || undefined
-    });
-    
-    startDateInstance.config.onChange.push((selectedDates) => {
-      if (selectedDates.length > 0) {
-        const newStartDate = selectedDates[0];
-        tempStartDate = new Date(newStartDate);
-        
-        // 시작일이 종료일보다 늦으면 종료일 해제
-        if (tempEndDate && tempStartDate > tempEndDate) {
-          tempEndDate = null;
-          if (endDateInstance) {
-            endDateInstance.clear();
-          }
-        }
-        
-        // 종료일 달력의 minDate 업데이트
-        if (endDateInstance) {
-          endDateInstance.set('minDate', tempStartDate);
-        }
-      } else {
-        tempStartDate = null;
-      }
-    });
-  }
-  
-  // 종료일 달력 초기화
-  if (endDateContainer) {
-    endDateInstance = flatpickr(endDateContainer, {
-      dateFormat: 'Y.m.d',
-      locale: Korean,
-      maxDate: new Date(),
-      minDate: tempStartDate || undefined,
-      disableMobile: true,
-      allowInput: false,
-      inline: true,
-      static: true,
-      defaultDate: tempEndDate || undefined
-    });
-    
-    endDateInstance.config.onChange.push((selectedDates) => {
-      if (selectedDates.length > 0) {
-        const newEndDate = selectedDates[0];
-        tempEndDate = new Date(newEndDate);
-        
-        // 종료일이 시작일보다 이전이면 시작일 해제
-        if (tempStartDate && tempEndDate < tempStartDate) {
-          tempStartDate = null;
-          if (startDateInstance) {
-            startDateInstance.clear();
-          }
-        }
-        
-        // 시작일 달력의 maxDate 업데이트
-        if (startDateInstance) {
-          const maxDate = tempEndDate > new Date() ? new Date() : tempEndDate;
-          startDateInstance.set('maxDate', maxDate);
-        }
-      } else {
-        tempEndDate = null;
-      }
-    });
+  // 피커 닫기
+  selectingField = null;
+}
+
+function isPickerItemSelected(item: number): boolean {
+  const currentValue = getCurrentValue();
+  return currentValue === item;
+}
+
+function validateYearMonth(type: 'start' | 'end') {
+  if (type === 'start') {
+    // 월 유효성 검사
+    if (tempStartMonth !== null) {
+      if (tempStartMonth < 1) tempStartMonth = 1;
+      if (tempStartMonth > 12) tempStartMonth = 12;
+    }
+  } else {
+    // 월 유효성 검사
+    if (tempEndMonth !== null) {
+      if (tempEndMonth < 1) tempEndMonth = 1;
+      if (tempEndMonth > 12) tempEndMonth = 12;
+    }
   }
 }
 
 function formatDateRange(start: Date, end: Date): string {
-  const startYear = String(start.getFullYear()).slice(-2);
+  const startYear = start.getFullYear();
   const startMonth = start.getMonth() + 1;
-  const startDay = start.getDate();
-  const endYear = String(end.getFullYear()).slice(-2);
+  const endYear = end.getFullYear();
   const endMonth = end.getMonth() + 1;
-  const endDay = end.getDate();
   
-  return `${startYear}.${startMonth}.${startDay} - ${endYear}.${endMonth}.${endDay}`;
+  return `${startYear}.${startMonth} - ${endYear}.${endMonth}`;
 }
 
 function showSnackbar(message: string) {
@@ -584,38 +690,80 @@ function showSnackbar(message: string) {
 }
 
 function cancelDateSelection() {
-  // Flatpickr 인스턴스 정리
-  if (startDateInstance) {
-    startDateInstance.destroy();
-    startDateInstance = null;
+  // 원래 값으로 복원
+  if (startDate) {
+    tempStartYear = startDate.getFullYear();
+    tempStartMonth = startDate.getMonth() + 1;
+  } else {
+    tempStartYear = null;
+    tempStartMonth = null;
   }
-  if (endDateInstance) {
-    endDateInstance.destroy();
-    endDateInstance = null;
+  
+  if (endDate) {
+    tempEndYear = endDate.getFullYear();
+    tempEndMonth = endDate.getMonth() + 1;
+  } else {
+    tempEndYear = null;
+    tempEndMonth = null;
   }
+  
+  selectingField = null;
   dateDialogOpen = false;
 }
 
 async function applyDateSelection() {
   // 유효성 검사
-  if (!tempStartDate) {
-    showSnackbar('시작일을 선택해주세요');
+  if (tempStartYear === null || tempStartMonth === null) {
+    showSnackbar('시작년도와 월을 선택해주세요');
     return;
   }
   
-  if (!tempEndDate) {
-    showSnackbar('종료일을 선택해주세요');
+  if (tempEndYear === null || tempEndMonth === null) {
+    showSnackbar('종료년도와 월을 선택해주세요');
     return;
   }
   
-  // 날짜 범위 설정
-  startDate = new Date(tempStartDate);
-  endDate = new Date(tempEndDate);
-  
-  // 시작일이 종료일보다 늦으면 교환
-  if (startDate > endDate) {
-    [startDate, endDate] = [endDate, startDate];
+  // 월 유효성 검사
+  if (tempStartMonth < 1 || tempStartMonth > 12) {
+    showSnackbar('시작월은 1-12 사이의 값이어야 합니다');
+    return;
   }
+  
+  if (tempEndMonth < 1 || tempEndMonth > 12) {
+    showSnackbar('종료월은 1-12 사이의 값이어야 합니다');
+    return;
+  }
+  
+  // 날짜 범위 설정 - 월의 첫날과 마지막날로 설정
+  const startYear = tempStartYear;
+  const startMonth = tempStartMonth;
+  const endYear = tempEndYear;
+  const endMonth = tempEndMonth;
+  
+  // 시작일과 종료일 비교
+  const startValue = startYear * 12 + startMonth;
+  const endValue = endYear * 12 + endMonth;
+  
+  let finalStartYear = startYear;
+  let finalStartMonth = startMonth;
+  let finalEndYear = endYear;
+  let finalEndMonth = endMonth;
+  
+  if (startValue > endValue) {
+    // 시작일이 종료일보다 늦으면 교환
+    finalStartYear = endYear;
+    finalStartMonth = endMonth;
+    finalEndYear = startYear;
+    finalEndMonth = startMonth;
+  }
+  
+  // 시작월의 첫날
+  startDate = new Date(finalStartYear, finalStartMonth - 1, 1);
+  startDate.setHours(0, 0, 0, 0);
+  
+  // 종료월의 마지막날
+  endDate = new Date(finalEndYear, finalEndMonth, 0); // 다음 달 0일 = 이번 달 마지막일
+  endDate.setHours(23, 59, 59, 999);
   
   // 스토리지에 저장
   saveDateRangeToStorage({ startDate, endDate });
@@ -686,6 +834,20 @@ header {
   background-color: transparent;
   user-select: none;
   transition: width .5s;
+}
+
+/* Dialog가 header 위에 표시되도록 */
+:global(.mdc-dialog) {
+  z-index: 1000 !important;
+}
+
+:global(.mdc-dialog__scrim) {
+  z-index: 999 !important;
+}
+
+:global(.mdc-dialog__surface) {
+  z-index: 1001 !important;
+  position: relative;
 }
 
 header.open {
@@ -985,120 +1147,124 @@ main {
 /* 선택 정보 스타일 */
 .selection-info {
   padding: 8px 16px;
-  background-color: #e8f5e8;
-  border-top: 1px solid #4CAF50;
+  background-color: #fff;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
   font-size: 12px;
-  color: #2e7d32;
+  color: #000;
   text-align: center;
 }
 
 /* 날짜 선택 다이얼로그 스타일 */
 .date-selector {
-  padding: 20px 0;
+  padding: 20px 16px;
   display: flex;
   flex-direction: column;
   gap: 24px;
+  min-width: 280px;
 }
 
-.date-field {
-  margin-bottom: 8px;
+.date-input-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.date-field label {
-  display: block;
-  margin-bottom: 12px;
+.date-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.date-label {
+  width: 50px;
   font-size: 14px;
   font-weight: 500;
   color: rgba(0, 0, 0, 0.87);
 }
 
-.calendar-container {
-  display: flex;
-  justify-content: center;
-}
-
-/* Flatpickr 달력 스타일 - 블랙/화이트 테마 */
-:global(.flatpickr-calendar) {
-  border-radius: 4px;
-  box-shadow: 0px 5px 5px -3px rgba(0, 0, 0, 0.2),
-              0px 8px 10px 1px rgba(0, 0, 0, 0.14),
-              0px 3px 14px 2px rgba(0, 0, 0, 0.12);
-  background-color: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-}
-
-:global(.flatpickr-month) {
-  background-color: #000;
-  color: white;
-  border-radius: 4px 4px 0 0;
-}
-
-:global(.flatpickr-prev-month),
-:global(.flatpickr-next-month) {
-  color: white;
-}
-
-:global(.flatpickr-prev-month:hover),
-:global(.flatpickr-next-month:hover) {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-:global(.flatpickr-weekdays) {
-  background-color: rgba(0, 0, 0, 0.05);
+.filter-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.12);
 }
 
-:global(.flatpickr-weekday) {
-  color: rgba(0, 0, 0, 0.87);
+.switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.date-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+/* 숫자 입력 필드의 증가/감소 버튼 제거 */
+.number-input :global(input[type="number"]::-webkit-inner-spin-button),
+.number-input :global(input[type="number"]::-webkit-outer-spin-button) {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.number-input :global(input[type="number"]) {
+  -moz-appearance: textfield;
+}
+
+.picker-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.picker-title {
+  font-size: 16px;
   font-weight: 500;
-}
-
-:global(.flatpickr-day) {
   color: rgba(0, 0, 0, 0.87);
-  border-color: transparent;
 }
 
-:global(.flatpickr-day:hover) {
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.picker-item {
+  padding: 12px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  background-color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+}
+
+.picker-item:hover {
   background-color: rgba(0, 0, 0, 0.08);
-  border-color: rgba(0, 0, 0, 0.12);
+  border-color: rgba(0, 0, 0, 0.24);
 }
 
-:global(.flatpickr-day.selected.startRange),
-:global(.flatpickr-day.selected.endRange) {
+.picker-item.selected {
   background-color: #000;
-  border-color: #000;
   color: white;
-  font-weight: 500;
-}
-
-:global(.flatpickr-day.inRange) {
-  background-color: rgba(0, 0, 0, 0.08);
-  border-color: rgba(0, 0, 0, 0.12);
-  color: rgba(0, 0, 0, 0.87);
-}
-
-:global(.flatpickr-day.today) {
-  border-color: #ff3e00;
-  color: #ff3e00;
-  font-weight: 500;
-}
-
-:global(.flatpickr-day.today:hover) {
-  background-color: rgba(255, 62, 0, 0.1);
-}
-
-:global(.flatpickr-day.disabled),
-:global(.flatpickr-day.nextMonthDay),
-:global(.flatpickr-day.prevMonthDay) {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-:global(.flatpickr-day.selected.startRange.today),
-:global(.flatpickr-day.selected.endRange.today) {
-  background-color: #000;
   border-color: #000;
-  color: white;
+  font-weight: 500;
 }
 
 </style>
