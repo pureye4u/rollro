@@ -12,7 +12,8 @@
 		"prepare": "npm run smui-theme",
 		"smui-theme": "smui-theme compile static/smui.css -i src/theme",
 		"ncp:build": "cd ncp/mapDirection && ./build.sh",
-		"ncp:deploy": "cd ncp/mapDirection && ./deploy.sh"
+		"ncp:deploy": "cd ncp/mapDirection && ./deploy.sh",
+		"deploy": "npm run build && firebase deploy --only hosting"
 	},
 	"devDependencies": {
 		"@smui/button": "^7.0.0-beta.18",

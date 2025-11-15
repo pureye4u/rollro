@@ -118,7 +118,7 @@
           bind:open={userMenuOpen} 
           bind:this={userMenuSurface}
           class="user-menu-surface"
-          style="left: {menuPosition.left}px; bottom: {menuPosition.bottom}px;"
+          style="right: {menuPosition.right}px; bottom: {menuPosition.bottom}px;"
         >
           <List>
             {#if selectedOwnerId && userID && selectedOwnerId !== userID}
@@ -236,7 +236,7 @@ let selectedOwnerId: string | null = null;
 let userMenuOpen = false;
 let userFollowers: Record<string, boolean> = {}; // ownerId -> isFollowing
 let ownerNameButtons: Record<string, HTMLButtonElement | undefined> = {};
-let menuPosition = { left: 0, bottom: 0 };
+let menuPosition = { right: 0, bottom: 0 };
 
 async function openUserMenu(ownerId: string, button: HTMLElement) {
   if (!userID || !ownerId || ownerId === userID) return;
@@ -251,14 +251,14 @@ async function openUserMenu(ownerId: string, button: HTMLElement) {
     // getBoundingClientRect()는 viewport 기준 좌표를 반환
     // bottom은 화면 하단에서 버튼 상단까지의 거리
     // left는 버튼의 왼쪽 위치
-    const left = rect.left;
+    const right = window.innerWidth - rect.right;
     const bottom = window.innerHeight - rect.top;
     
     console.log('Button rect:', rect);
-    console.log('Calculated CSS position:', { left, bottom });
+    console.log('Calculated CSS position:', { right, bottom });
     
     // CSS 변수로 위치 설정
-    menuPosition = { left, bottom };
+    menuPosition = { right, bottom };
     
     // 메뉴 열기
     userMenuOpen = true;
@@ -851,10 +851,12 @@ function formatExecutedDate(dateString: string): string {
   z-index: 1000 !important;
   position: fixed !important;
   top: auto !important;
+  left: auto !important;
   height: fit-content !important;
   max-height: 400px !important;
   overflow-y: auto !important;
   transform-origin: left bottom !important;
+  width: 100px !important;
 }
 
 :global(.user-menu-surface.mdc-menu-surface--open) {
@@ -869,7 +871,12 @@ function formatExecutedDate(dateString: string): string {
   font-size: 14px !important;
 }
 
-:global(.user-menu-surface .mdc-list-item__text) {
+:global(.user-menu-surface .mdc-list-item__text),
+:global(.user-menu-surface .mdc-deprecated-list-item__text),
+:global(.user-menu-surface .mdc-list-item__primary-text) {
   font-size: 14px !important;
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+  box-sizing: border-box !important;
 }
 </style>

@@ -13,6 +13,15 @@
           <Item on:SMUI:action={() => goto('/logs')}>
             <Text>Logs</Text>
           </Item>
+          {#if $session?.isLoggedIn && $session?.user?.uid}
+            <Item on:SMUI:action={() => {
+              if ($session?.user?.uid) {
+                goto(`/user/${$session.user.uid}`);
+              }
+            }}>
+              <Text>My</Text>
+            </Item>
+          {/if}
           <Separator />
           <Item on:SMUI:action={logout}>
             <Text>Logout</Text>
@@ -31,6 +40,7 @@
 	import { goto } from '$app/navigation';
 	import { signOut } from 'firebase/auth';
 	import { auth } from '$lib/firebase.client';
+	import { session } from '$lib/session';
   import TopAppBar, {
     Row,
     Section,
@@ -40,7 +50,7 @@
   import IconButton from '@smui/icon-button';
   import Menu from '@smui/menu';
   import List, { Item, Separator, Text } from '@smui/list';
- 
+
   let topAppBar: TopAppBar;
   let menu: Menu;
 
