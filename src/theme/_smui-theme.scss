@@ -3,11 +3,17 @@
 @use '@material/theme/color-palette';
 
 // Svelte Colors!
-@use '@material/theme/index' as theme with ($primary: #000,
-	$secondary: #ff3e00,
-	$surface: #fff,
-	$background: #fff,
-	$error: color-palette.$red-900);
+@use '@material/theme/index' as theme with ($primary: #1a73e8,
+	/* Google Blue */
+	$secondary: #5f6368,
+	/* Dark Gray */
+	$surface: #ffffff,
+	/* White */
+	$background: #ffffff,
+	/* White */
+	$error: #d93025
+	/* Red */
+);
 
 @use '@material/button/mixins' as mdc-button;
 
@@ -167,21 +173,24 @@ a {
 /* Common */
 
 .button-map-point {
-  &.mdc-button {
+	&.mdc-button {
 		@include mdc-button.shape-radius(100%);
 		@include mdc-button.ink-color(#fff);
-  }
-  &.mdc-button--unelevated,
-  &.mdc-button--raised {
+	}
+
+	&.mdc-button--unelevated,
+	&.mdc-button--raised {
 		@include mdc-button.shape-radius(100%);
 		@include mdc-button.filled-accessible(#fff);
-  }
-  &.mdc-button--outlined {
+	}
+
+	&.mdc-button--outlined {
 		@include mdc-button.shape-radius(100%);
 		@include mdc-button.outline-color(#fff);
 		@include mdc-button.ink-color(#fff);
-  }
-  @include mdc-button.shape-radius(100%);
+	}
+
+	@include mdc-button.shape-radius(100%);
 	@include mdc-button.ripple-states(#fff);
 }
 
