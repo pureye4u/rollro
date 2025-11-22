@@ -1,14 +1,65 @@
 <NavBarContainer>
   <div class="route-page-container">
     <div class="search-container">
-      <Textfield 
-        bind:value={searchKeyword} 
-        label="여정 검색" 
-        on:input={handleSearch}
-        style="width: 100%; margin-bottom: 10px;"
-      >
-        <Icon class="material-icons" slot="leadingIcon">search</Icon>
-      </Textfield>
+      <div class="search-row">
+        <Textfield 
+          bind:value={searchKeyword} 
+          label="여정 검색" 
+          on:input={handleSearch}
+          style="flex: 1; margin-bottom: 10px;"
+        >
+          <Icon class="material-icons" slot="leadingIcon">search</Icon>
+        </Textfield>
+        
+        <div class="sort-menu-container">
+          <Group variant="outlined">
+            <Button
+              variant="outlined"
+              class="sort-button"
+            >
+              <span class="sort-button-content">
+                <Icon class="material-icons">{currentSortOption?.icon || 'sort'}</Icon>
+                <Label>{currentSortOption?.label || '정렬'}</Label>
+              </span>
+            </Button>
+            <div use:GroupItem>
+              <Button
+                bind:this={sortMenuButton}
+                variant="outlined"
+                on:click={() => sortMenu.setOpen(true)}
+                style="padding: 0; min-width: 36px;"
+              >
+                <Icon class="material-icons" style="margin: 0;">arrow_drop_down</Icon>
+              </Button>
+              <Menu
+                bind:this={sortMenu}
+                anchor={sortMenuButton}
+                anchorCorner="BOTTOM_LEFT"
+              >
+                <List>
+                  {#each sortOptions as option}
+                    <Item 
+                      on:SMUI:action={() => {
+                        sortOption = option.value;
+                        sortMenu.setOpen(false);
+                        handleSortChange();
+                      }}
+                      selected={sortOption === option.value}
+                    >
+                      <Text>
+                        <span class="sort-option-content">
+                          <Icon class="material-icons">{option.icon}</Icon>
+                          <span>{option.label}</span>
+                        </span>
+                      </Text>
+                    </Item>
+                  {/each}
+                </List>
+              </Menu>
+            </div>
+          </Group>
+        </div>
+      </div>
       
       <div class="filter-chips">
         <button 
@@ -198,12 +249,13 @@
 
 <script lang="ts">
 import { onMount, tick } from 'svelte';
-import { collection, getDocs, addDoc, query, orderBy, where, serverTimestamp, doc, getDoc, arrayUnion, arrayRemove, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, query, where, serverTimestamp, doc, getDoc, arrayUnion, arrayRemove, updateDoc } from 'firebase/firestore';
 import List, { Item, Text, Separator } from '@smui/list';
-import Button from '@smui/button';
-import Fab, { Label, Icon } from '@smui/fab';
+import Button, { Label, Group, GroupItem } from '@smui/button';
+import Fab, { Icon } from '@smui/fab';
 import Textfield from '@smui/textfield';
 import MenuSurface, { Anchor } from '@smui/menu-surface';
+import Menu from '@smui/menu';
 import { goto } from '$app/navigation';
 import { db } from '$lib/firebase.client';
 import { getUsersNicknames } from '../../services/userRepository';
@@ -226,6 +278,14 @@ let availableYears: number[] = [];
 let currentPage = 1;
 const itemsPerPage = 30;
 let totalPages = 1;
+let sortOption: string = 'date-desc';
+
+const sortOptions = [
+  { value: 'title-asc', label: '제목순', icon: 'arrow_upward' },
+  { value: 'title-desc', label: '제목순', icon: 'arrow_downward' },
+  { value: 'date-asc', label: '날짜순', icon: 'arrow_upward' },
+  { value: 'date-desc', label: '날짜순', icon: 'arrow_downward' },
+];
 
 // 소유자 정보 캐시
 let ownerNames: Record<string, string> = {};
@@ -237,6 +297,11 @@ let userMenuOpen = false;
 let userFollowers: Record<string, boolean> = {}; // ownerId -> isFollowing
 let ownerNameButtons: Record<string, HTMLButtonElement | undefined> = {};
 let menuPosition = { right: 0, bottom: 0 };
+
+// 정렬 메뉴 관련
+let sortMenuButton: Button;
+let sortMenu: Menu;
+$: currentSortOption = sortOptions.find(opt => opt.value === sortOption);
 
 async function openUserMenu(ownerId: string, button: HTMLElement) {
   if (!userID || !ownerId || ownerId === userID) return;
@@ -269,9 +334,9 @@ async function loadRouteList() {
   isLoading = true;
   try {
     // route-meta 컬렉션에서 가벼운 메타데이터만 조회
+    // 정렬은 클라이언트 측에서 처리하므로 orderBy 제거
     const ref = collection(db, 'route-meta');
-    const q = query(ref, orderBy('title'));
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(ref);
     
     // 모든 여정을 가져온 후 권한에 따라 필터링
     allRoutes = snapshot.docs
@@ -403,6 +468,9 @@ function applyFilters() {
     );
   }
 
+  // 정렬 적용
+  routes = applySorting(routes);
+
   filteredRoutes = routes;
   totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
   
@@ -415,6 +483,77 @@ function applyFilters() {
   }
   
   updatePaginatedRoutes();
+}
+
+function applySorting(routes: RouteMetaModel[]): RouteMetaModel[] {
+  const sorted = [...routes];
+  
+  switch (sortOption) {
+    case 'title-asc':
+      return sorted.sort((a, b) => {
+        const titleA = a.title || '';
+        const titleB = b.title || '';
+        return titleA.localeCompare(titleB, 'ko');
+      });
+    
+    case 'title-desc':
+      return sorted.sort((a, b) => {
+        const titleA = a.title || '';
+        const titleB = b.title || '';
+        return titleB.localeCompare(titleA, 'ko');
+      });
+    
+    case 'date-desc':
+      return sorted.sort((a, b) => {
+        const dateA = getRouteDate(a);
+        const dateB = getRouteDate(b);
+        return dateB - dateA;
+      });
+    
+    case 'date-asc':
+      return sorted.sort((a, b) => {
+        const dateA = getRouteDate(a);
+        const dateB = getRouteDate(b);
+        return dateA - dateB;
+      });
+    
+    default:
+      return sorted;
+  }
+}
+
+function getRouteDate(route: RouteMetaModel): number {
+  // 실행날짜가 있으면 실행날짜 사용, 없으면 생성일 사용
+  if (route.executedDate) {
+    return new Date(route.executedDate).getTime();
+  }
+  return getTimestampValue(route.createdAt);
+}
+
+function getTimestampValue(timestamp: any): number {
+  if (!timestamp) return 0;
+  // Firestore Timestamp 타입인 경우
+  if (typeof timestamp.toMillis === 'function') {
+    return timestamp.toMillis();
+  }
+  // 이미 숫자인 경우 (milliseconds)
+  if (typeof timestamp === 'number') {
+    return timestamp;
+  }
+  // Date 객체인 경우
+  if (timestamp instanceof Date) {
+    return timestamp.getTime();
+  }
+  // 문자열인 경우
+  if (typeof timestamp === 'string') {
+    return new Date(timestamp).getTime() || 0;
+  }
+  return 0;
+}
+
+function handleSortChange() {
+  currentPage = 1;
+  applyFilters();
 }
 
 function toggleFilter(filter: string) {
@@ -504,7 +643,7 @@ async function addRoute() {
   isAddDisabled = true;
   const id = await createRoute();
   if (typeof id === 'string') {
-    goto(`/route/${id}`);
+    goto(`/route/${id}?new=true`);
   }
   isAddDisabled = false;
 }
@@ -577,8 +716,30 @@ function formatExecutedDate(dateString: string): string {
   flex-shrink: 0;
 }
 
+.search-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
 :global(.search-container .mdc-text-field) {
-  width: 100%;
+  flex: 1;
+}
+
+.sort-menu-container {
+  position: relative;
+}
+
+.sort-button-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sort-option-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .filter-chips {

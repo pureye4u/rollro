@@ -317,7 +317,7 @@
   <main>
     <div id="map"></div>
   </main>
-  <div class="title-layer">
+  <div class="title-layer" bind:this={titleFieldElement}>
     <Textfield bind:value={title} label="제목" disabled={!editMode} />
   </div>
   <ul class="link-box">
@@ -332,9 +332,10 @@
 </div>
 
 <script lang="ts">
-import { onMount } from 'svelte';
+import { onMount, tick } from 'svelte';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { goto } from '$app/navigation';
+import { page } from '$app/stores';
 import Textfield from '@smui/textfield';
 import Button from '@smui/button';
 import Dialog, { Title, Content, Actions } from '@smui/dialog';
@@ -402,6 +403,7 @@ let isOpenImportURLDialog = false;
 let isOpenPermissionDialog = false;
 let editMode: boolean = false;
 let headerOpen: boolean = false;
+let titleFieldElement: HTMLElement | null = null;
 let selectedPointIndex = -1;
 let editingPointIndex = -1;
 let editingPointTitle = '';
@@ -433,6 +435,9 @@ function showSnackbar(message: string) {
 }
 
 function drawPath(path: naver.maps.LatLng[]) {
+  if (!routeLine) {
+    return; // routeLine이 아직 초기화되지 않았으면 무시
+  }
   if (path.length === 0) {
     routeLine.setMap(null);
   } else {
@@ -1267,8 +1272,25 @@ function initMap() {
 onMount(async () => {
 	const user: any = await data.getAuthUser();
   userID = user.uid;
-  loadRouteModel()
+  
+  // 먼저 지도를 초기화하여 routeLine을 생성
   initMap();
+  
+  // 그 다음 모델을 로드
+  await loadRouteModel();
+  
+  // 새로 만들어진 경로인 경우 편집 모드로 시작
+  if ($page.url.searchParams.get('new') === 'true') {
+    startEdit();
+    // DOM 업데이트 후 제목 필드에 포커스
+    await tick();
+    if (titleFieldElement) {
+      const input = titleFieldElement.querySelector('input');
+      if (input) {
+        input.focus();
+      }
+    }
+  }
 });
 
 export let data;

@@ -190,18 +190,18 @@ a {
 	padding: 20px;
 }
 
-.shaped-outlined .mdc-notched-outline .mdc-notched-outline__leading {
-	border-radius: 28px 0 0 28px !important;
-	width: 28px !important;
-}
+// .shaped-outlined .mdc-notched-outline .mdc-notched-outline__leading {
+// 	border-radius: 28px 0 0 28px !important;
+// 	width: 28px !important;
+// }
 
-.shaped-outlined .mdc-notched-outline .mdc-notched-outline__trailing {
-	border-radius: 0 28px 28px 0 !important;
-}
+// .shaped-outlined .mdc-notched-outline .mdc-notched-outline__trailing {
+// 	border-radius: 0 28px 28px 0 !important;
+// }
 
-.shaped-outlined .mdc-notched-outline .mdc-notched-outline__notch {
-	max-width: calc(100% - 28px * 2) !important;
-}
+// .shaped-outlined .mdc-notched-outline .mdc-notched-outline__notch {
+// 	max-width: calc(100% - 28px * 2) !important;
+// }
 
 .shaped-outlined.mdc-text-field--with-leading-icon:not(.mdc-text-field--label-floating) .mdc-floating-label {
 	left: 16px !important;
